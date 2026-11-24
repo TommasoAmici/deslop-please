@@ -9,12 +9,14 @@ use std::collections::{HashMap, HashSet};
 
 use crate::Error;
 use crate::model::{
-    File, FileId, Item, ItemId, ItemKind, Model, NodeId, NodeKind, Reference, Tree, Wrapper,
+    File, FileId, Item, ItemId, ItemKind, Model, NodeId, NodeKind, Reference, Tree, Visibility,
+    Wrapper,
 };
 use crate::scip::{Index, SymbolInformation};
 use crate::swift::Workspace;
 use crate::swift::source::{Body, Encoding, Source};
 use crate::swift::symbol::{Name, parse};
+use crate::workspace::TargetKind;
 
 pub fn build(index: &Index, workspace: &Workspace) -> Result<Model, Error> {
     let mut builder = Builder::new(workspace)?;
@@ -72,6 +74,11 @@ impl<'a> Builder<'a> {
                     path,
                     module,
                     test: target.test,
+                    target: Some(if target.test {
+                        TargetKind::Test
+                    } else {
+                        TargetKind::Library
+                    }),
                     lines: text.lines().count(),
                 });
             }
@@ -263,6 +270,7 @@ impl<'a> Builder<'a> {
                 lent: vec![property],
                 copied: Vec::new(),
                 to_read: named.information.kind == KIND_GETTER,
+                whole: false,
             },
         );
     }
@@ -284,10 +292,15 @@ impl<'a> Builder<'a> {
             owner: named.module,
             module: None,
             file: Some(named.file),
+            line: 0,
             kind,
             parent,
+            first_param_type: None,
+            visibility: Visibility::Private,
             trait_impl,
             takes_self,
+            is_unsafe: false,
+            extern_abi: false,
             holds_nothing: false,
         });
         ItemId::new(self.items.len() - 1)
@@ -417,6 +430,7 @@ impl<'a> Builder<'a> {
             items: self.items,
             references: self.references,
             wrappers: self.wrappers,
+            glob_reexports: Vec::new(),
         }
     }
 }

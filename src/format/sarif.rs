@@ -11,11 +11,16 @@ use crate::lint::{Diagnostic, Lint, Location, Picture};
 const SCHEMA: &str = "https://json.schemastore.org/sarif-2.1.0.json";
 const VERSION: &str = "2.1.0";
 
-const ALL_LINTS: [Lint; 6] = [
+const ALL_LINTS: [Lint; 11] = [
     Lint::ModuleCycle,
     Lint::Tangle,
     Lint::FieldLeak,
     Lint::ShallowModule,
+    Lint::WideType,
+    Lint::ScatteredImpl,
+    Lint::UnusedPub,
+    Lint::OverPublic,
+    Lint::PassThrough,
     Lint::WideDirectory,
     Lint::LongFile,
 ];
@@ -77,6 +82,11 @@ fn short_description(lint: Lint) -> &'static str {
         Lint::ShallowModule => {
             "A module exposes too much of its interface relative to what it hides"
         }
+        Lint::WideType => "A type shows more working functions than a reader can hold in mind",
+        Lint::ScatteredImpl => "A type's inherent `impl` blocks are spread across modules",
+        Lint::UnusedPub => "A `pub` item has no non-test callers outside its library",
+        Lint::OverPublic => "A `pub` item is only used inside its own library",
+        Lint::PassThrough => "A shim adds a second path to code without adding abstraction",
         Lint::WideDirectory => "A directory holds too many files and subdirectories",
         Lint::LongFile => "A source file exceeds the maximum line count",
     }

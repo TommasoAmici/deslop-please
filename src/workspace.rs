@@ -20,6 +20,8 @@ pub struct Package {
     pub crate_name: String,
     /// Relative to the workspace's root, `/`-separated; empty for the root itself.
     pub directory: String,
+    /// Whether Cargo allows publishing the package (`false` for `publish = false`).
+    pub publish: bool,
     pub targets: Vec<Target>,
 }
 
@@ -110,11 +112,16 @@ impl Package {
             let root = relative(Path::new(text(target, "src_path")?), root)?;
             targets.push(Target { kind, root });
         }
+        let publish = package
+            .get("publish")
+            .and_then(Value::as_array)
+            .is_none_or(|registries| !registries.is_empty());
         Ok(Package {
             crate_name: library_name.unwrap_or_else(|| name.replace('-', "_")),
             version: text(package, "version")?.to_owned(),
             name,
             directory,
+            publish,
             targets,
         })
     }
@@ -223,6 +230,7 @@ mod tests {
                 version: "0.1.0".into(),
                 crate_name: "p".into(),
                 directory: "pkg".into(),
+                publish: true,
                 targets: vec![],
             }],
         };
@@ -252,6 +260,7 @@ mod tests {
             }, {
                 "name": "root-bin",
                 "version": "1.0.0",
+                "publish": [],
                 "manifest_path": "/w/Cargo.toml",
                 "targets": [{"kind": ["bin"], "name": "root-bin", "src_path": "/w/src/main.rs"}]
             }]
@@ -259,15 +268,23 @@ mod tests {
         let workspace = Workspace::from_metadata(&metadata).unwrap();
         let tool = &workspace.packages[0];
         assert_eq!(
-            (tool.directory.as_str(), tool.crate_name.as_str()),
-            ("tools/my-tool", "my_tool")
+            (
+                tool.directory.as_str(),
+                tool.crate_name.as_str(),
+                tool.publish
+            ),
+            ("tools/my-tool", "my_tool", true)
         );
         assert_eq!(tool.targets[1].kind, TargetKind::Test);
         assert_eq!(tool.targets[1].root, "tools/my-tool/tests/it.rs");
         let root_bin = &workspace.packages[1];
         assert_eq!(
-            (root_bin.directory.as_str(), root_bin.crate_name.as_str()),
-            ("", "root_bin")
+            (
+                root_bin.directory.as_str(),
+                root_bin.crate_name.as_str(),
+                root_bin.publish
+            ),
+            ("", "root_bin", false)
         );
     }
 }

@@ -5,7 +5,7 @@
 //! still the unit a reader lists and the place a feature is kept. References
 //! between those directories form the cycle the Rust lints call a module cycle.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::Error;
 use crate::model::{
@@ -96,11 +96,59 @@ impl<'a> Builder<'a> {
                 continue;
             };
             let module = self.files[file.index()].module;
+            let text = std::fs::read_to_string(self.workspace.root.join(&*document.path)).map_err(
+                |e| {
+                    Error::new(format!(
+                        "{}: {e}",
+                        self.workspace.root.join(&*document.path).display()
+                    ))
+                },
+            )?;
+            let source =
+                Source::with_encoding(text, Encoding::from_scip(document.position_encoding));
+            let mut definitions: HashMap<&str, Vec<crate::scip::Range>> = HashMap::new();
+            for occurrence in &document.occurrences {
+                if occurrence.definition {
+                    definitions
+                        .entry(occurrence.symbol)
+                        .or_default()
+                        .push(occurrence.range);
+                }
+            }
+            let mut source_backed = HashSet::new();
             for information in &document.symbols {
                 let Some(name) = parse(information.symbol, information.display_name) else {
                     continue;
                 };
                 if !self.targets.contains_key(&name.module) {
+                    continue;
+                }
+                let Some(written) = name.path.last() else {
+                    continue;
+                };
+                if definitions
+                    .get(information.symbol)
+                    .is_some_and(|ranges| ranges.iter().any(|&range| source.spells(range, written)))
+                {
+                    source_backed.insert(name.item());
+                }
+            }
+            for information in &document.symbols {
+                let Some(name) = parse(information.symbol, information.display_name) else {
+                    continue;
+                };
+                if !self.targets.contains_key(&name.module) {
+                    continue;
+                }
+                let Some(written) = name.path.last() else {
+                    continue;
+                };
+                let defined = definitions.get(information.symbol).is_some_and(|ranges| {
+                    ranges.iter().any(|&range| source.spells(range, written))
+                });
+                if !defined
+                    && !(is_accessor(information.kind) && source_backed.contains(&name.item()))
+                {
                     continue;
                 }
                 named.push(Named {
@@ -582,6 +630,36 @@ mod tests {
         last.range = at(policy, "queue.push");
         let model = build(&index, &workspace).unwrap();
         assert_eq!(keys(&model), Vec::<String>::new());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn a_macro_generated_backing_field_needs_a_source_spelling_to_be_a_field() {
+        let (workspace, root) = workspace("generated");
+        let text = "@Observable final class Model { var value = 0 }\n";
+        std::fs::write(root.join("Sources/App/Model/Queue.swift"), text).unwrap();
+        let model = "scip-swift swiftpm App . Model#";
+        let value = "scip-swift swiftpm App . Model#value.";
+        let generated = "scip-swift swiftpm App . Model#_value.";
+        let index = Index {
+            documents: vec![Document {
+                path: Cow::Borrowed("Sources/App/Model/Queue.swift"),
+                position_encoding: 1,
+                symbols: vec![
+                    symbol(model, "App.Model", KIND_CLASS),
+                    symbol(value, "App.Model.value : Swift.Int", KIND_PROPERTY),
+                    symbol(generated, "App.Model._value : Swift.Int", KIND_PROPERTY),
+                ],
+                occurrences: vec![
+                    occurrence(model, at(text, "Model"), true),
+                    occurrence(value, at(text, "value"), true),
+                    occurrence(generated, at(text, "Model"), true),
+                ],
+            }],
+        };
+        let model = build(&index, &workspace).unwrap();
+        assert!(model.items.iter().any(|item| item.name == "Model::value"));
+        assert!(!model.items.iter().any(|item| item.name == "Model::_value"));
         std::fs::remove_dir_all(root).unwrap();
     }
 

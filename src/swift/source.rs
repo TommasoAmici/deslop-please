@@ -146,6 +146,18 @@ impl Source {
             .map(|(_, item)| *item)
     }
 
+    /// Whether a definition range spells the declaration's source name.
+    /// Compiler-generated members can point at the macro or owning type instead.
+    pub fn spells(&self, range: Range, name: &str) -> bool {
+        let Some(bytes) = self.range(range) else {
+            return false;
+        };
+        let Some(written) = self.text.get(bytes) else {
+            return false;
+        };
+        written.trim_matches('`') == name
+    }
+
     /// A getter's value is only read when the code does not immediately reach
     /// through it: `queue.count` reads a number, `queue.items.append` works on
     /// the collection, and `queue.items[0]` indexes it.
@@ -327,6 +339,15 @@ mod tests {
             }),
             Some(text.find("items").unwrap())
         );
+    }
+
+    #[test]
+    fn a_definition_spells_only_the_name_written_at_its_range() {
+        let text = "@Observable final class Model { var value = 0 }\n";
+        let source = Source::with_encoding(text.to_owned(), Encoding::Utf8);
+        assert!(source.spells(range(text, "value"), "value"));
+        assert!(!source.spells(range(text, "Model"), "_value"));
+        assert!(!source.spells(range(text, "@Observable"), "_value"));
     }
 
     #[test]

@@ -51,7 +51,9 @@ The same six lints run: `field-leak` follows a stored or computed property throu
 `shallow-module` counts methods and free functions but not synthesized accessors; `tangle` finds types that know each
 other in a circle; and `wide-directory` and `long-file` use every source SwiftPM lists, including files with no symbol
 occurrences. Symbols whose only identity is a raw compiler USR and that have no resolved display name are left out,
-because the model cannot safely say which type or member they belong to.
+because the model cannot safely say which type or member they belong to. A symbol also needs a definition range that
+spells its name in the source. Compiler-generated members such as Observation backing fields are left out; synthesized
+accessors remain when their source property is present.
 
 ```bash
 > deslop-please

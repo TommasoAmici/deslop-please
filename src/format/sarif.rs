@@ -11,7 +11,7 @@ use crate::lint::{Diagnostic, Lint, Location, Picture};
 const SCHEMA: &str = "https://json.schemastore.org/sarif-2.1.0.json";
 const VERSION: &str = "2.1.0";
 
-const ALL_LINTS: [Lint; 18] = [
+const ALL_LINTS: [Lint; 25] = [
     Lint::ModuleCycle,
     Lint::Tangle,
     Lint::FieldLeak,
@@ -20,18 +20,24 @@ const ALL_LINTS: [Lint; 18] = [
     Lint::WideType,
     Lint::WideModule,
     Lint::WideStruct,
+    Lint::WideEnum,
     Lint::ScatteredImpl,
     Lint::UnusedPub,
+    Lint::TestOnlyPub,
     Lint::OverPublic,
     Lint::PassThrough,
+    Lint::ReexportSprawl,
     Lint::LongFunction,
     Lint::WideSignature,
+    Lint::StringError,
+    Lint::DuplicateCode,
     Lint::HighFanOut,
     Lint::FeatureEnvy,
+    Lint::LayerViolation,
+    Lint::UnusedDep,
     Lint::WideDirectory,
     Lint::LongFile,
 ];
-
 pub fn render(diagnostics: &[Diagnostic]) -> String {
     let rules: Vec<Value> = ALL_LINTS
         .iter()
@@ -93,14 +99,21 @@ fn short_description(lint: Lint) -> &'static str {
         Lint::WideType => "A type shows more working functions than a reader can hold in mind",
         Lint::WideModule => "A leaf module shows more working functions than a reader can scan",
         Lint::WideStruct => "A struct has more fields than a reader can scan at once",
+        Lint::WideEnum => "An enum has more variants than a reader can scan at once",
         Lint::ScatteredImpl => "A type's inherent `impl` blocks are spread across modules",
         Lint::UnusedPub => "A `pub` item has no non-test callers outside its library",
+        Lint::TestOnlyPub => "A `pub(crate)`/`pub(super)` item is only referenced by tests",
         Lint::OverPublic => "A `pub` item is only used inside its own library",
         Lint::PassThrough => "A shim adds a second path to code without adding abstraction",
+        Lint::ReexportSprawl => "A module re-exports another module's or crate's whole namespace",
         Lint::LongFunction => "A function is longer or branches more than a reader can hold in mind",
         Lint::WideSignature => "A function takes more parameters than a reader can hold in mind",
+        Lint::StringError => "A function returns a stringly-typed `Result<_, String>`",
+        Lint::DuplicateCode => "Two functions share an identical normalized body",
         Lint::HighFanOut => "A module references too many other modules",
         Lint::FeatureEnvy => "A method uses another type's members more than its own",
+        Lint::LayerViolation => "A module depends on another in a lower layer",
+        Lint::UnusedDep => "A declared dependency is never referenced in non-test code",
         Lint::WideDirectory => "A directory holds too many files and subdirectories",
         Lint::LongFile => "A source file exceeds the maximum line count",
     }

@@ -433,6 +433,9 @@ impl<'a> Builder<'a> {
             references: self.references,
             wrappers: self.wrappers,
             glob_reexports: Vec::new(),
+            module_reexports: Vec::new(),
+            crate_deps: Vec::new(),
+            layers: Vec::new(),
             serde_types: HashSet::new(),
         }
     }

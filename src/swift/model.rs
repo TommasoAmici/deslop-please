@@ -358,7 +358,7 @@ impl<'a> Builder<'a> {
                     continue;
                 };
                 let kind = self.kinds.get(occurrence.symbol).copied().unwrap_or(0);
-                if is_accessor(kind) {
+                if is_accessor(kind) || matches!(kind, KIND_PROPERTY | KIND_STATIC_PROPERTY) {
                     let name = &self.items[item.index()].name;
                     let property = name
                         .strip_suffix("::getter")
@@ -674,6 +674,33 @@ mod tests {
         let model = build(&index, &workspace).unwrap();
         assert!(model.items.iter().any(|item| item.name == "Model::value"));
         assert!(!model.items.iter().any(|item| item.name == "Model::_value"));
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn a_macro_generated_property_use_needs_a_source_spelling() {
+        let (workspace, root) = workspace("generated-use");
+        let text = "@Observable final class Model { var value = 0 }\n";
+        std::fs::write(root.join("Sources/App/Model/Queue.swift"), text).unwrap();
+        let model = "scip-swift swiftpm App . Model#";
+        let value = "scip-swift swiftpm App . Model#value.";
+        let index = Index {
+            documents: vec![Document {
+                path: Cow::Borrowed("Sources/App/Model/Queue.swift"),
+                position_encoding: 1,
+                symbols: vec![
+                    symbol(model, "App.Model", KIND_CLASS),
+                    symbol(value, "App.Model.value : Swift.Int", KIND_PROPERTY),
+                ],
+                occurrences: vec![
+                    occurrence(model, at(text, "Model"), true),
+                    occurrence(value, at(text, "value"), true),
+                    occurrence(value, at(text, "Model"), false),
+                ],
+            }],
+        };
+        let model = build(&index, &workspace).unwrap();
+        assert!(model.references.is_empty());
         std::fs::remove_dir_all(root).unwrap();
     }
 

@@ -437,6 +437,8 @@ impl<'a> Builder<'a> {
             crate_deps: Vec::new(),
             layers: Vec::new(),
             serde_types: HashSet::new(),
+            traits: HashSet::new(),
+            trait_impls: HashMap::new(),
         }
     }
 }

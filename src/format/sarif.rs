@@ -6,38 +6,46 @@ use std::fmt::Write as _;
 use serde_json::{Value, json};
 
 use crate::TOOL;
-use crate::lint::{Diagnostic, Lint, Location, Picture};
+use crate::lint::{
+    Diagnostic, EncapsulationLint, GraphLint, HygieneLint, Lint, Location, Picture, SizeLint,
+    SurfaceLint,
+};
 
 const SCHEMA: &str = "https://json.schemastore.org/sarif-2.1.0.json";
 const VERSION: &str = "2.1.0";
 
-const ALL_LINTS: [Lint; 25] = [
-    Lint::ModuleCycle,
-    Lint::Tangle,
-    Lint::FieldLeak,
-    Lint::SharedMutableBag,
-    Lint::ShallowModule,
-    Lint::WideType,
-    Lint::WideModule,
-    Lint::WideStruct,
-    Lint::WideEnum,
-    Lint::ScatteredImpl,
-    Lint::UnusedPub,
-    Lint::TestOnlyPub,
-    Lint::OverPublic,
-    Lint::PassThrough,
-    Lint::ReexportSprawl,
-    Lint::LongFunction,
-    Lint::WideSignature,
-    Lint::StringError,
-    Lint::DuplicateCode,
-    Lint::HighFanOut,
-    Lint::FeatureEnvy,
-    Lint::LayerViolation,
-    Lint::UnusedDep,
-    Lint::WideDirectory,
-    Lint::LongFile,
+const ALL_LINTS: [Lint; 29] = [
+    Lint::Graph(GraphLint::ModuleCycle),
+    Lint::Graph(GraphLint::Tangle),
+    Lint::Graph(GraphLint::HighFanOut),
+    Lint::Graph(GraphLint::GodHub),
+    Lint::Graph(GraphLint::LayerViolation),
+    Lint::Graph(GraphLint::UnusedDep),
+    Lint::Encapsulation(EncapsulationLint::FieldLeak),
+    Lint::Encapsulation(EncapsulationLint::SharedMutableBag),
+    Lint::Encapsulation(EncapsulationLint::ShallowModule),
+    Lint::Encapsulation(EncapsulationLint::ScatteredImpl),
+    Lint::Encapsulation(EncapsulationLint::FeatureEnvy),
+    Lint::Encapsulation(EncapsulationLint::PassThrough),
+    Lint::Encapsulation(EncapsulationLint::ReexportSprawl),
+    Lint::Size(SizeLint::WideType),
+    Lint::Size(SizeLint::WideModule),
+    Lint::Size(SizeLint::WideStruct),
+    Lint::Size(SizeLint::WideEnum),
+    Lint::Size(SizeLint::LongFunction),
+    Lint::Size(SizeLint::WideSignature),
+    Lint::Size(SizeLint::PositionalTrap),
+    Lint::Size(SizeLint::WideDirectory),
+    Lint::Size(SizeLint::LongFile),
+    Lint::Surface(SurfaceLint::UnusedPub),
+    Lint::Surface(SurfaceLint::TestOnlyPub),
+    Lint::Surface(SurfaceLint::OverPublic),
+    Lint::Surface(SurfaceLint::SingleImplTrait),
+    Lint::Hygiene(HygieneLint::StringError),
+    Lint::Hygiene(HygieneLint::DuplicateCode),
+    Lint::Hygiene(HygieneLint::DuplicateStruct),
 ];
+
 pub fn render(diagnostics: &[Diagnostic]) -> String {
     let rules: Vec<Value> = ALL_LINTS
         .iter()
@@ -87,35 +95,57 @@ fn rule_index(lint: Lint) -> usize {
 
 fn short_description(lint: Lint) -> &'static str {
     match lint {
-        Lint::ModuleCycle => "Modules depend on each other in a cycle",
-        Lint::Tangle => {
+        Lint::Graph(GraphLint::ModuleCycle) => "Modules depend on each other in a cycle",
+        Lint::Graph(GraphLint::Tangle) => {
             "Items depend on each other in a cycle across modules or beyond what fits in mind"
         }
-        Lint::FieldLeak => "A struct field is manipulated outside its owning type",
-        Lint::SharedMutableBag => "A struct's fields are mutated from several other modules",
-        Lint::ShallowModule => {
+        Lint::Graph(GraphLint::HighFanOut) => "A module references too many other modules",
+        Lint::Graph(GraphLint::GodHub) => "A module both many modules use and that uses many",
+        Lint::Graph(GraphLint::LayerViolation) => "A module depends on another in a lower layer",
+        Lint::Graph(GraphLint::UnusedDep) => "A declared dependency is never referenced in non-test code",
+        Lint::Encapsulation(EncapsulationLint::FieldLeak) => {
+            "A struct field is manipulated outside its owning type"
+        }
+        Lint::Encapsulation(EncapsulationLint::SharedMutableBag) => {
+            "A struct's fields are mutated from several other modules"
+        }
+        Lint::Encapsulation(EncapsulationLint::ShallowModule) => {
             "A module exposes too much of its interface relative to what it hides"
         }
-        Lint::WideType => "A type shows more working functions than a reader can hold in mind",
-        Lint::WideModule => "A leaf module shows more working functions than a reader can scan",
-        Lint::WideStruct => "A struct has more fields than a reader can scan at once",
-        Lint::WideEnum => "An enum has more variants than a reader can scan at once",
-        Lint::ScatteredImpl => "A type's inherent `impl` blocks are spread across modules",
-        Lint::UnusedPub => "A `pub` item has no non-test callers outside its library",
-        Lint::TestOnlyPub => "A `pub(crate)`/`pub(super)` item is only referenced by tests",
-        Lint::OverPublic => "A `pub` item is only used inside its own library",
-        Lint::PassThrough => "A shim adds a second path to code without adding abstraction",
-        Lint::ReexportSprawl => "A module re-exports another module's or crate's whole namespace",
-        Lint::LongFunction => "A function is longer or branches more than a reader can hold in mind",
-        Lint::WideSignature => "A function takes more parameters than a reader can hold in mind",
-        Lint::StringError => "A function returns a stringly-typed `Result<_, String>`",
-        Lint::DuplicateCode => "Two functions share an identical normalized body",
-        Lint::HighFanOut => "A module references too many other modules",
-        Lint::FeatureEnvy => "A method uses another type's members more than its own",
-        Lint::LayerViolation => "A module depends on another in a lower layer",
-        Lint::UnusedDep => "A declared dependency is never referenced in non-test code",
-        Lint::WideDirectory => "A directory holds too many files and subdirectories",
-        Lint::LongFile => "A source file exceeds the maximum line count",
+        Lint::Encapsulation(EncapsulationLint::ScatteredImpl) => {
+            "A type's inherent `impl` blocks are spread across modules"
+        }
+        Lint::Encapsulation(EncapsulationLint::FeatureEnvy) => {
+            "A method uses another type's members more than its own"
+        }
+        Lint::Encapsulation(EncapsulationLint::PassThrough) => {
+            "A shim adds a second path to code without adding abstraction"
+        }
+        Lint::Encapsulation(EncapsulationLint::ReexportSprawl) => {
+            "A module re-exports another module's or crate's whole namespace"
+        }
+        Lint::Size(SizeLint::WideType) => "A type shows more working functions than a reader can hold in mind",
+        Lint::Size(SizeLint::WideModule) => "A leaf module shows more working functions than a reader can scan",
+        Lint::Size(SizeLint::WideStruct) => "A struct has more fields than a reader can scan at once",
+        Lint::Size(SizeLint::WideEnum) => "An enum has more variants than a reader can scan at once",
+        Lint::Size(SizeLint::LongFunction) => {
+            "A function is longer or branches more than a reader can hold in mind"
+        }
+        Lint::Size(SizeLint::WideSignature) => {
+            "A function takes more parameters than a reader can hold in mind"
+        }
+        Lint::Size(SizeLint::PositionalTrap) => {
+            "A function takes several parameters whose type and order decide their meaning"
+        }
+        Lint::Size(SizeLint::WideDirectory) => "A directory holds too many files and subdirectories",
+        Lint::Size(SizeLint::LongFile) => "A source file exceeds the maximum line count",
+        Lint::Surface(SurfaceLint::UnusedPub) => "A `pub` item has no non-test callers outside its library",
+        Lint::Surface(SurfaceLint::TestOnlyPub) => "A restricted item is only referenced by tests",
+        Lint::Surface(SurfaceLint::OverPublic) => "A `pub` item is only used inside its own library",
+        Lint::Surface(SurfaceLint::SingleImplTrait) => "A trait has one implementation or fewer",
+        Lint::Hygiene(HygieneLint::StringError) => "A function returns a stringly-typed `Result<_, String>`",
+        Lint::Hygiene(HygieneLint::DuplicateCode) => "Two functions share an identical normalized body",
+        Lint::Hygiene(HygieneLint::DuplicateStruct) => "Two structs have the same fields",
     }
 }
 
@@ -235,7 +265,7 @@ mod tests {
     #[test]
     fn diagnostic_maps_rule_location_fingerprint_notes_and_related_locations() {
         let diag = Diagnostic {
-            lint: Lint::ModuleCycle,
+            lint: Lint::Graph(GraphLint::ModuleCycle),
             key: "net::kinds,net::socket".into(),
             message: "2 modules in `net` use each other in a circle".into(),
             location: Some(Location {
@@ -300,7 +330,7 @@ mod tests {
     #[test]
     fn diagnostic_without_location_omits_locations_field() {
         let diag = Diagnostic {
-            lint: Lint::ShallowModule,
+            lint: Lint::Encapsulation(EncapsulationLint::ShallowModule),
             key: "app::store".into(),
             message: "`app::store` is shallow".into(),
             location: None,
@@ -316,6 +346,6 @@ mod tests {
         let result = &value["runs"][0]["results"][0];
         assert!(result.get("locations").is_none());
         assert!(result.get("relatedLocations").is_none());
-        assert_eq!(result["ruleIndex"], rule_index(Lint::ShallowModule));
+        assert_eq!(result["ruleIndex"], rule_index(Lint::Encapsulation(EncapsulationLint::ShallowModule)));
     }
 }

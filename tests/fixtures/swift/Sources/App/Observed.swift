@@ -8,6 +8,7 @@ final class Observed {
 
 extension Observed {
     var isSet: Bool { value != 0 }
+    var isNotSet: Bool { !isSet }
 }
 
 final class Counter {

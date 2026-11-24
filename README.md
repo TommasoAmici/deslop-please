@@ -42,10 +42,11 @@ deslop-please --scip index.scip
 `--scip` still reads the package around the current directory for its source files and target layout. Cargo's
 `--target` and `--features` flags do not apply to Swift and are rejected there.
 
-A SwiftPM target is the package in the report. Directories below its source root are its modules, because Swift has
-no per-file module boundary but a directory is still the unit a reader lists and a feature is kept in. A
-`module-cycle` therefore means two directories in one target use each other's types, not that two Swift modules
-import each other. Test targets are test code and do not form cycles with production code.
+A SwiftPM target is the package in the report. A directory directly containing source files is a module, because Swift
+has no per-file module boundary but a concrete directory is still the unit a reader lists and a feature is kept in.
+Directories that only group other modules are namespaces, not interfaces of their own. A `module-cycle` therefore
+means two concrete directories in one target use each other's types, not that two Swift modules import each other.
+Test targets are test code and do not form cycles with production code.
 
 The same six lints run: `field-leak` follows a stored or computed property through its getter and setter;
 `shallow-module` counts methods and free functions but not synthesized accessors; `tangle` finds types that know each

@@ -43,6 +43,8 @@ struct Builder<'a> {
     items_by_name: HashMap<(String, String), ItemId>,
     /// Every indexed symbol, including synthesized accessors and locals we do not keep.
     symbols: HashMap<String, ItemId>,
+    /// The source property each synthesized accessor belongs to.
+    accessor_properties: HashMap<ItemId, ItemId>,
     kinds: HashMap<String, u64>,
 }
 
@@ -85,6 +87,7 @@ impl<'a> Builder<'a> {
             targets,
             items_by_name: HashMap::new(),
             symbols: HashMap::new(),
+            accessor_properties: HashMap::new(),
             kinds: HashMap::new(),
         })
     }
@@ -250,6 +253,7 @@ impl<'a> Builder<'a> {
         };
         named.name.path.push(accessor.to_owned());
         let id = self.push(&named, ItemKind::Function, parent, takes_self);
+        self.accessor_properties.insert(id, property);
         self.symbols.insert(named.information.symbol.to_owned(), id);
         self.kinds
             .insert(named.information.symbol.to_owned(), named.information.kind);
@@ -325,6 +329,23 @@ impl<'a> Builder<'a> {
                     Some((start, item, occurrence.range, occurrence.enclosing))
                 })
                 .collect();
+            // scip-swift can point a property accessor's definition at its expression. Use the
+            // source property's declaration so the accessor body includes the whole expression.
+            let accessor_ranges: Vec<_> = definitions
+                .iter()
+                .filter_map(|&(_, item, _, _)| {
+                    let property = *self.accessor_properties.get(&item)?;
+                    let (start, _, range, enclosing) = definitions
+                        .iter()
+                        .find(|(_, defined, _, _)| *defined == property)?;
+                    Some((item, *start, *range, *enclosing))
+                })
+                .collect();
+            for (item, start, range, enclosing) in accessor_ranges {
+                if let Some(definition) = definitions.iter_mut().find(|(_, defined, _, _)| *defined == item) {
+                    *definition = (start, item, range, enclosing);
+                }
+            }
             definitions.sort_by_key(|(start, _, _, _)| *start);
             let mut bodies = Vec::new();
             for (index, (start, item, range, enclosing)) in definitions.iter().enumerate() {
@@ -338,10 +359,11 @@ impl<'a> Builder<'a> {
                     .find(|(next, _, _, _)| *next > *start)
                     .map(|(next, _, _, _)| *next)
                     .unwrap_or(source.len());
-                let body = enclosing
-                    .and_then(|enclosing| source.range(enclosing))
-                    .map(|range| Body { range })
-                    .or_else(|| source.body_after(*range, limit));
+                // The declaration's braces or expression are the reliable body. An indexer's enclosing
+                // range can cover only the expression, leaving its first name outside the range.
+                let body = source
+                    .body_after(*range, limit)
+                    .or_else(|| enclosing.and_then(|enclosing| source.range(enclosing)).map(|range| Body { range }));
                 if let Some(body) = body {
                     bodies.push((body, item.index()));
                 }
@@ -400,11 +422,14 @@ impl<'a> Builder<'a> {
 }
 
 fn directory_module(tree: &mut Tree, package: NodeId, directory: &str) -> NodeId {
-    let mut node = package;
-    for part in directory.split('/').filter(|part| !part.is_empty()) {
-        node = tree.child(node, NodeKind::Module, part);
+    if directory.is_empty() {
+        return package;
     }
-    node
+    // A directory with source files is a module. Directories that only group
+    // other modules are namespaces, not interfaces of their own; keeping them
+    // out of the graph avoids reporting cycles and shallow interfaces for an
+    // organizational folder that contains no implementation.
+    tree.child(package, NodeKind::Module, &directory.replace('/', "::"))
 }
 
 fn parent(path: &str) -> &str {
@@ -538,6 +563,15 @@ mod tests {
             test: false,
             enclosing: None,
         }
+    }
+
+    #[test]
+    fn grouping_directories_are_namespaces_not_modules() {
+        let mut tree = Tree::new();
+        let package = tree.child(tree.root(), NodeKind::Package, "App");
+        let module = directory_module(&mut tree, package, "Features/Audio/ML");
+        assert_eq!(tree.parent(module), Some(package));
+        assert_eq!(tree.display(module), "App::Features::Audio::ML");
     }
 
     fn queue_document(policy: &str) -> Index<'static> {

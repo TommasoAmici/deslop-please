@@ -79,8 +79,15 @@ fn a_swift_package_is_indexed_and_an_external_scip_index_gives_the_same_report()
     );
     assert!(
         !keys.contains("field-leak App::Observed::value")
+            && !keys.contains("field-leak App::Observed::isSet")
             && !keys.contains("field-leak App::Counter::value"),
         "source accessors and Observation macro expansions are not outside field uses: {keys}"
+    );
+    assert!(
+        keys.contains("field-leak App::Model::Guarded::other")
+            && !keys.contains("field-leak App::Model::Guarded::value")
+            && !keys.contains("field-leak App::Model::Guarded::doubled"),
+        "extension methods and property accessors are part of their type, even in another directory: {keys}"
     );
 
     let index = find_index(&workspace.join(".build/deslop-please")).unwrap();

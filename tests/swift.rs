@@ -77,6 +77,11 @@ fn a_swift_package_is_indexed_and_an_external_scip_index_gives_the_same_report()
         keys.contains("field-leak App::Model::Queue::items"),
         "{keys}"
     );
+    assert!(
+        !keys.contains("field-leak App::Observed::value")
+            && !keys.contains("field-leak App::Counter::value"),
+        "source accessors and Observation macro expansions are not outside field uses: {keys}"
+    );
 
     let index = find_index(&workspace.join(".build/deslop-please")).unwrap();
     let external_allow = workspace.with_extension("external.allow");

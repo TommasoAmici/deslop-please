@@ -158,6 +158,15 @@ impl Source {
         written.trim_matches('`') == name
     }
 
+    /// Whether a use range spells the member's source name, including `queue.items`.
+    pub fn spells_use(&self, range: Range, name: &str) -> bool {
+        self.spells(range, name) || self.range(range).is_some_and(|bytes| {
+            self.text
+                .get(bytes)
+                .is_some_and(|written| written.trim_matches('`').ends_with(&format!(".{name}")))
+        })
+    }
+
     /// A getter's value is only read when the code does not immediately reach
     /// through it: `queue.count` reads a number, `queue.items.append` works on
     /// the collection, and `queue.items[0]` indexes it.

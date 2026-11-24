@@ -3,5 +3,6 @@ import PackageDescription
 
 let package = Package(
     name: "DeslopSwiftFixture",
+    platforms: [.macOS(.v14)],
     targets: [.executableTarget(name: "App")]
 )

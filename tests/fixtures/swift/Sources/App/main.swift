@@ -1,3 +1,5 @@
 let queue = Queue(limit: 10)
 admit(queue)
 print(queue.count())
+print(Observed().isSet)
+print(Counter().doubled)

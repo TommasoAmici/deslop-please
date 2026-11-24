@@ -327,14 +327,16 @@ impl<'a> Builder<'a> {
                 .collect();
             definitions.sort_by_key(|(start, _, _, _)| *start);
             let mut bodies = Vec::new();
-            for (index, (_, item, range, enclosing)) in definitions.iter().enumerate() {
+            for (index, (start, item, range, enclosing)) in definitions.iter().enumerate() {
                 let model_item = &self.items[item.index()];
                 if !matches!(model_item.kind, ItemKind::Type | ItemKind::Function) {
                     continue;
                 }
                 let limit = definitions
-                    .get(index + 1)
-                    .map(|(start, _, _, _)| *start)
+                    .iter()
+                    .skip(index + 1)
+                    .find(|(next, _, _, _)| *next > *start)
+                    .map(|(next, _, _, _)| *next)
                     .unwrap_or(source.len());
                 let body = enclosing
                     .and_then(|enclosing| source.range(enclosing))
@@ -356,6 +358,18 @@ impl<'a> Builder<'a> {
                     continue;
                 };
                 let kind = self.kinds.get(occurrence.symbol).copied().unwrap_or(0);
+                if is_accessor(kind) {
+                    let name = &self.items[item.index()].name;
+                    let property = name
+                        .strip_suffix("::getter")
+                        .or_else(|| name.strip_suffix("::setter"))
+                        .unwrap_or(name);
+                    let written = property.rsplit("::").next().unwrap_or(property);
+                    // Observation's macro can point an accessor at the type or attribute instead of a source use.
+                    if !source.spells_use(occurrence.range, written) {
+                        continue;
+                    }
+                }
                 let copies = !occurrence.write
                     && matches!(kind, KIND_GETTER | KIND_PROPERTY | KIND_STATIC_PROPERTY)
                     && source.only_reads(occurrence.range);

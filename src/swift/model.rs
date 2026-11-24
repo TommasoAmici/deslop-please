@@ -302,6 +302,7 @@ impl<'a> Builder<'a> {
             is_unsafe: false,
             extern_abi: false,
             holds_nothing: false,
+            metrics: None,
         });
         ItemId::new(self.items.len() - 1)
     }
@@ -416,6 +417,7 @@ impl<'a> Builder<'a> {
                     holder: source.holder(&bodies, range.start).map(ItemId::new),
                     item,
                     copies,
+                    mutates: !copies,
                     test,
                 });
             }
@@ -431,6 +433,7 @@ impl<'a> Builder<'a> {
             references: self.references,
             wrappers: self.wrappers,
             glob_reexports: Vec::new(),
+            serde_types: HashSet::new(),
         }
     }
 }

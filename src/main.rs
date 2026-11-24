@@ -61,11 +61,12 @@ usage: {TOOL} [crate_or_mod] [--allow <path>] [--update-allow <path>]
        [--scip <index.scip>] [--target <triple>] [-F, --features <features>]
        [--all-features] [--no-default-features] [--json | --sarif]
 
-Runs architectural lints (module-cycle, tangle, field-leak, shallow-module,
-Runs architectural lints (module-cycle, tangle, field-leak, shallow-module,
-wide-type, scattered-impl, unused-pub, over-public, pass-through,
-wide-directory, long-file) on the Cargo workspace or Swift package around the
-current directory. Rust uses `rust-analyzer scip`; Swift uses `scip-swift`.
+Runs architectural lints (module-cycle, tangle, field-leak, shared-mutable-bag,
+shallow-module, wide-type, wide-module, wide-struct, scattered-impl, unused-pub,
+over-public, pass-through, long-function, wide-signature, high-fan-out,
+feature-envy, wide-directory, long-file) on the Cargo workspace or Swift package
+around the current directory. Rust uses `rust-analyzer scip`; Swift uses
+`scip-swift`.
 
 options:
   <crate_or_mod>               check only one crate, target or directory module

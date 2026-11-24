@@ -11,16 +11,23 @@ use crate::lint::{Diagnostic, Lint, Location, Picture};
 const SCHEMA: &str = "https://json.schemastore.org/sarif-2.1.0.json";
 const VERSION: &str = "2.1.0";
 
-const ALL_LINTS: [Lint; 11] = [
+const ALL_LINTS: [Lint; 18] = [
     Lint::ModuleCycle,
     Lint::Tangle,
     Lint::FieldLeak,
+    Lint::SharedMutableBag,
     Lint::ShallowModule,
     Lint::WideType,
+    Lint::WideModule,
+    Lint::WideStruct,
     Lint::ScatteredImpl,
     Lint::UnusedPub,
     Lint::OverPublic,
     Lint::PassThrough,
+    Lint::LongFunction,
+    Lint::WideSignature,
+    Lint::HighFanOut,
+    Lint::FeatureEnvy,
     Lint::WideDirectory,
     Lint::LongFile,
 ];
@@ -79,14 +86,21 @@ fn short_description(lint: Lint) -> &'static str {
             "Items depend on each other in a cycle across modules or beyond what fits in mind"
         }
         Lint::FieldLeak => "A struct field is manipulated outside its owning type",
+        Lint::SharedMutableBag => "A struct's fields are mutated from several other modules",
         Lint::ShallowModule => {
             "A module exposes too much of its interface relative to what it hides"
         }
         Lint::WideType => "A type shows more working functions than a reader can hold in mind",
+        Lint::WideModule => "A leaf module shows more working functions than a reader can scan",
+        Lint::WideStruct => "A struct has more fields than a reader can scan at once",
         Lint::ScatteredImpl => "A type's inherent `impl` blocks are spread across modules",
         Lint::UnusedPub => "A `pub` item has no non-test callers outside its library",
         Lint::OverPublic => "A `pub` item is only used inside its own library",
         Lint::PassThrough => "A shim adds a second path to code without adding abstraction",
+        Lint::LongFunction => "A function is longer or branches more than a reader can hold in mind",
+        Lint::WideSignature => "A function takes more parameters than a reader can hold in mind",
+        Lint::HighFanOut => "A module references too many other modules",
+        Lint::FeatureEnvy => "A method uses another type's members more than its own",
         Lint::WideDirectory => "A directory holds too many files and subdirectories",
         Lint::LongFile => "A source file exceeds the maximum line count",
     }

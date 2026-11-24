@@ -1,11 +1,12 @@
 # deslop-please
 
-[![slop](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fdeterministic-machines%2Fdeslop-please%2Fbadges%2Fslop.json)](https://github.com/deterministic-machines/deslop-please/actions/workflows/ci.yml?query=branch%3Amain)
-[![test](https://github.com/deterministic-machines/deslop-please/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/deterministic-machines/deslop-please/actions/workflows/ci.yml?query=branch%3Amain)
-[![crates.io](https://img.shields.io/crates/v/deslop-please.svg)](https://crates.io/crates/deslop-please)
+[![slop](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FTommasoAmici%2Fdeslop-please%2Fbadges%2Fslop.json)](https://github.com/TommasoAmici/deslop-please/actions/workflows/ci.yml?query=branch%3Amain)
+[![test](https://github.com/TommasoAmici/deslop-please/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/TommasoAmici/deslop-please/actions/workflows/ci.yml?query=branch%3Amain)
 
 An opinionated linter to remove sloppy code. It follows [*A Philosophy of Software Design*](https://www.amazon.com/Philosophy-Software-Design-John-Ousterhout/dp/1732102201): 
-**deep** modules, **narrow** interfaces. 
+**deep** modules, **narrow** interfaces.
+
+This fork adds Swift package support through `scip-swift`. The Rust workspace path and its lints are unchanged.
 
 
 ```bash
@@ -15,6 +16,42 @@ cargo install deslop-please
 For Python, TypeScript and JavaScript, see the [port](https://github.com/Bor4brn/deslop-please).
 
 Requires `rust-analyzer` (e.g., `rustup component add rust-analyzer`).
+
+## Swift
+
+Run it inside a Swift package:
+
+```bash
+deslop-please
+```
+
+Swift support uses [`scip-swift`](https://github.com/jarvis-intelligence/scip-swift), a macOS 14+ executable that
+turns SwiftPM's IndexStoreDB records into a SCIP index. Install its macOS binary from the releases page and put
+`scip-swift` on `PATH`. The linter runs `swift package describe` to find the targets, then lets `scip-swift` build and
+index the package. The index is cached under `.build/deslop-please/swift/` and rebuilt when a source, the manifest,
+Swift or `scip-swift` changes.
+
+To index separately, or to use an index made on another machine:
+
+```bash
+scip-swift /path/to/package
+cd /path/to/package
+deslop-please --scip index.scip
+```
+
+`--scip` still reads the package around the current directory for its source files and target layout. Cargo's
+`--target` and `--features` flags do not apply to Swift and are rejected there.
+
+A SwiftPM target is the package in the report. Directories below its source root are its modules, because Swift has
+no per-file module boundary but a directory is still the unit a reader lists and a feature is kept in. A
+`module-cycle` therefore means two directories in one target use each other's types, not that two Swift modules
+import each other. Test targets are test code and do not form cycles with production code.
+
+The same six lints run: `field-leak` follows a stored or computed property through its getter and setter;
+`shallow-module` counts methods and free functions but not synthesized accessors; `tangle` finds types that know each
+other in a circle; and `wide-directory` and `long-file` use every source SwiftPM lists, including files with no symbol
+occurrences. Symbols whose only identity is a raw compiler USR and that have no resolved display name are left out,
+because the model cannot safely say which type or member they belong to.
 
 ```bash
 > deslop-please

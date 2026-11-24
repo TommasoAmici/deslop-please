@@ -1,5 +1,5 @@
-//! Architectural linter for Rust workspaces: enforces deep modules and narrow
-//! interfaces, working like `cargo check` / `cargo clippy`.
+//! Architectural linter for Rust and Swift: enforces deep modules and narrow interfaces, working like `cargo clippy`
+//! or a Swift package's tests.
 
 mod allow;
 mod configuration;
@@ -8,7 +8,9 @@ mod graph;
 mod indexing;
 mod lint;
 mod model;
+mod project;
 mod scip;
+mod swift;
 mod workspace;
 
 use std::fmt;
@@ -17,8 +19,7 @@ use std::process::ExitCode;
 
 use allow::AllowList;
 use configuration::Configuration;
-use model::Model;
-use workspace::Workspace;
+use project::Project;
 
 pub const TOOL: &str = env!("CARGO_BIN_NAME");
 
@@ -48,6 +49,7 @@ struct Options {
     scope: Option<String>,
     allow: Option<PathBuf>,
     update_allow: Option<PathBuf>,
+    scip: Option<PathBuf>,
     format: OutputFormat,
     configuration: Configuration,
 }
@@ -56,16 +58,19 @@ fn usage() -> String {
     format!(
         "\
 usage: {TOOL} [crate_or_mod] [--allow <path>] [--update-allow <path>]
-       [--target <triple>] [-F, --features <features>] [--all-features]
-       [--no-default-features] [--json | --sarif]
+       [--scip <index.scip>] [--target <triple>] [-F, --features <features>]
+       [--all-features] [--no-default-features] [--json | --sarif]
 
 Runs architectural lints (module-cycle, tangle, field-leak, shallow-module,
-wide-directory, long-file) on the Cargo workspace.
+wide-directory, long-file) on the Cargo workspace or Swift package around the
+current directory. Rust uses `rust-analyzer scip`; Swift uses `scip-swift`.
 
 options:
-  <crate_or_mod>               check only one crate or module (e.g. my-crate)
+  <crate_or_mod>               check only one crate, target or directory module
   --allow <path>               suppress listed existing debt; new errors still fail
   --update-allow <path>        write current diagnostics to <path>
+  --scip <index.scip>          read an existing SCIP index instead of running the
+                              language's indexer (the project is still discovered)
   --json                       write diagnostics as JSON to stdout
   --sarif                      write diagnostics as SARIF 2.1.0 to stdout
   -V, --version                print the version and exit
@@ -90,9 +95,10 @@ A flag's value is the next word, or follows `=`: `--target=<triple>`.
 }
 
 /// The flags, and whether each takes a value. `-F` is `--features`.
-const FLAGS: [(&str, bool); 8] = [
+const FLAGS: [(&str, bool); 9] = [
     ("--allow", true),
     ("--update-allow", true),
+    ("--scip", true),
     ("--target", true),
     ("--features", true),
     ("--all-features", false),
@@ -110,6 +116,7 @@ fn parse_arguments(arguments: &[String]) -> Result<Options, String> {
         scope: None,
         allow: None,
         update_allow: None,
+        scip: None,
         format: OutputFormat::Text,
         configuration: Configuration::default(),
     };
@@ -151,6 +158,12 @@ fn parse_arguments(arguments: &[String]) -> Result<Options, String> {
                     return Err("'--update-allow' needs a path".to_owned());
                 }
                 options.update_allow = Some(PathBuf::from(value));
+            }
+            "--scip" => {
+                if value.is_empty() {
+                    return Err("'--scip' needs a path".to_owned());
+                }
+                options.scip = Some(PathBuf::from(value));
             }
             "--target" => configuration.target(value)?,
             "--features" => configuration.features(value),
@@ -236,8 +249,18 @@ fn main() -> ExitCode {
 }
 
 fn run(options: Options) -> Result<bool, Error> {
-    let workspace = Workspace::discover()?;
-    let model = load_model(&workspace, &options.configuration)?;
+    let project = Project::discover()?;
+    if options.scip.is_some() && !options.configuration.is_default() {
+        return Err(Error::new(
+            "--target and --features choose a configuration while indexing; they cannot be used with --scip",
+        ));
+    }
+    if project.is_swift() && !options.configuration.is_default() {
+        return Err(Error::new(
+            "--target and --features choose a Cargo configuration; Swift packages do not take them",
+        ));
+    }
+    let model = project.load_model(&options.configuration, options.scip.as_deref())?;
     let scope = match &options.scope {
         Some(query) => Some(
             lint::resolve_node(&model, query)
@@ -276,13 +299,6 @@ fn run(options: Options) -> Result<bool, Error> {
         OutputFormat::Sarif => print!("{}", format::render_sarif(&reported)),
     }
     Ok(reported.is_empty())
-}
-
-fn load_model(workspace: &Workspace, configuration: &Configuration) -> Result<Model, Error> {
-    let bytes = indexing::index(workspace, configuration)?;
-    let index =
-        scip::read(&bytes).map_err(|e| Error::new(format!("rust-analyzer's index: {e}")))?;
-    model::build(&index, workspace)
 }
 
 #[cfg(test)]
@@ -391,6 +407,16 @@ mod tests {
             configuration(&same).to_string(),
             "--target aarch64-apple-darwin"
         );
+    }
+
+    #[test]
+    fn an_external_index_is_read_instead_of_running_the_indexer() {
+        let options = parsed(&["App::Model", "--scip=index.scip"]).unwrap();
+        assert_eq!(options.scope.as_deref(), Some("App::Model"));
+        assert_eq!(options.scip, Some(PathBuf::from("index.scip")));
+        assert!(options.configuration.is_default());
+        assert!(parsed(&["--scip"]).is_err());
+        assert!(parsed(&["--scip=a", "--scip=b"]).is_err());
     }
 
     #[test]

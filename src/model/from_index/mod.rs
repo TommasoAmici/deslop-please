@@ -687,6 +687,8 @@ mod tests {
             range,
             symbol: "rust-analyzer cargo p 0.1.0 crate/",
             definition,
+            write: false,
+            test: false,
             enclosing: definition.then_some(range),
         };
         let whole = range((0, 0), (5, 0));

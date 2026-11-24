@@ -4,9 +4,9 @@ version = "0.1.6"
 edition = "2024"
 description = "An opinionated linter to remove sloppy code: deep modules, narrow interfaces."
 license = "MIT"
-repository = "https://github.com/deterministic-machines/deslop-please"
+repository = "https://github.com/TommasoAmici/deslop-please"
 readme = "README.md"
-keywords = ["lint", "architecture", "modules", "rust-analyzer"]
+keywords = ["lint", "architecture", "modules", "rust-analyzer", "swift", "scip"]
 categories = ["development-tools", "command-line-utilities"]
 # The fixtures under tests/ are Cargo projects of their own; the published crate
 # is just the tool.

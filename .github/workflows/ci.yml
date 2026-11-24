@@ -68,6 +68,32 @@ jobs:
           echo "color=$color" >> "$GITHUB_OUTPUT"
           exit "$status"
 
+  swift:
+    name: Swift package
+    runs-on: macos-14
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install Rust
+        run: |
+          rustup toolchain install 1.99.0 --profile minimal
+          rustup default 1.99.0
+
+      - name: Install scip-swift
+        run: |
+          curl -sSL --fail --retry 3 \
+            https://github.com/jarvis-intelligence/scip-swift/releases/download/v0.3.0/scip-swift-0.3.0.tar.gz \
+            -o "$RUNNER_TEMP/scip-swift.tar.gz"
+          tar xzf "$RUNNER_TEMP/scip-swift.tar.gz" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/scip-swift" --version
+
+      - name: Test Swift indexing and an external SCIP index
+        run: cargo test --locked --test swift
+
   # Publishes `slop.json` (a shields.io endpoint) to the `badges` branch, for
   # the README's `slop | ok` badge. Only for main, and kept apart from `check`
   # so the job that builds and runs code never holds a write token.

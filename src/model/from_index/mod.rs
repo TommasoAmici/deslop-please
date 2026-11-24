@@ -12,8 +12,8 @@ use std::collections::{HashMap, HashSet};
 
 use crate::Error;
 use crate::model::{
-    CrateDep, File, FileId, GlobReexport, Item, ItemId, ItemKind, Model, ModuleReexports, NodeId,
-    NodeKind, Reference, TraitImpl, Tree, Visibility, Wrapper,
+    CrateDep, File, FileId, GlobReexport, Item, ItemId, ItemKind, Language, Model, ModuleReexports,
+    NodeId, NodeKind, Reference, TraitImpl, Tree, Visibility, Wrapper,
 };
 use crate::scip::{Document, Impl, Index, Kind, Occurrence, Place, Range, Symbol};
 use crate::workspace::{Package, Workspace};
@@ -121,6 +121,7 @@ impl<'a> Builder<'a> {
         self.mark_lent_reads(&wrappers);
         let crate_deps = self.collect_crate_deps();
         Model {
+            language: Language::Rust,
             tree: self.tree,
             files: self.files,
             items: self.items,

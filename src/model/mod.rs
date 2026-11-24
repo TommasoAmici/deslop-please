@@ -13,8 +13,20 @@ use std::collections::{HashMap, HashSet};
 
 use crate::workspace::TargetKind;
 
+/// The language the model was built from. Some lints read structure only Rust
+/// has, so the language decides whether they run.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum Language {
+    #[default]
+    Rust,
+    Swift,
+}
+
 #[derive(Debug, Default)]
 pub struct Model {
+    /// Which language built this model: [`Language::Rust`] unless the Swift
+    /// front end made it.
+    pub language: Language,
     pub tree: Tree,
     /// By [`FileId`].
     pub files: Vec<File>,

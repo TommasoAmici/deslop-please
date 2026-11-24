@@ -427,6 +427,7 @@ impl<'a> Builder<'a> {
 
     fn finish(self) -> Model {
         Model {
+            language: crate::model::Language::Swift,
             tree: self.tree,
             files: self.files,
             items: self.items,

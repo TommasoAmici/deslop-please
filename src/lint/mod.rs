@@ -21,7 +21,7 @@ mod wide_type;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use crate::graph::{Graph, ThingId};
-use crate::model::{ItemId, Model, NodeId, NodeKind, Reference, Tree};
+use crate::model::{ItemId, Language, Model, NodeId, NodeKind, Reference, Tree};
 
 /// What a reader can hold in mind at once: seven (Miller, "The Magical Number
 /// Seven, Plus or Minus Two", 1956). The members of a tangle cannot be learned
@@ -246,16 +246,21 @@ pub fn check(model: &Model, scope: Option<NodeId>) -> Vec<Diagnostic> {
     diagnostics.extend(tangles::check(model, &graph, scope));
     diagnostics.extend(leaks::check(model, &graph, scope));
     diagnostics.extend(shallow::check(model, &graph, scope));
-    diagnostics.extend(wide_type::check(model, &graph, scope));
     diagnostics.extend(wide_module::check(model, &graph, scope));
-    diagnostics.extend(wide_struct::check(model, &graph, scope));
-    diagnostics.extend(scattered_impl::check(model, &graph, scope));
     diagnostics.extend(visibility::check(model, &graph, scope));
     diagnostics.extend(pass_through::check(model, &graph, scope));
     diagnostics.extend(functions::check(model, &graph, scope));
     diagnostics.extend(duplicates::check(model, &graph, scope));
-    diagnostics.extend(coupling::check(model, &graph, scope));
     diagnostics.extend(layout::check(model, scope));
+    // These lints read Rust's inherent impls, crate visibility, serde/DTO
+    // markers and Cargo's module graph. A Swift package has no equivalents, so
+    // running them would report the language rather than the design.
+    if model.language == Language::Rust {
+        diagnostics.extend(wide_type::check(model, &graph, scope));
+        diagnostics.extend(wide_struct::check(model, &graph, scope));
+        diagnostics.extend(scattered_impl::check(model, &graph, scope));
+        diagnostics.extend(coupling::check(model, &graph, scope));
+    }
     diagnostics.sort_by(|a, b| a.lint.cmp(&b.lint).then_with(|| a.key.cmp(&b.key)));
     diagnostics
 }
@@ -573,6 +578,31 @@ mod tests {
             tie("d", "a"),
         ];
         assert_eq!(shortest_circle(&two_ways), [0, 1, 4]);
+    }
+
+    #[test]
+    fn a_swift_type_with_more_than_fifteen_fields_is_not_wide() {
+        use crate::model::ItemKind;
+        use crate::model::tests::Sample;
+        let mut sample = Sample::new();
+        let module = sample.module("");
+        let wide = sample.item(module, "Wide", ItemKind::Type);
+        for field in 0..16 {
+            sample.member(
+                wide,
+                module,
+                &format!("Wide::field{field}"),
+                ItemKind::Field,
+            );
+        }
+        let has_wide_struct = |model: &Model| {
+            check(model, None)
+                .iter()
+                .any(|d| d.lint == Lint::Size(SizeLint::WideStruct))
+        };
+        assert!(has_wide_struct(&sample.model));
+        sample.model.language = Language::Swift;
+        assert!(!has_wide_struct(&sample.model));
     }
 
     #[test]

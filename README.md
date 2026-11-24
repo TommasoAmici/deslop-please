@@ -48,10 +48,15 @@ Directories that only group other modules are namespaces, not interfaces of thei
 means two concrete directories in one target use each other's types, not that two Swift modules import each other.
 Test targets are test code and do not form cycles with production code.
 
-The same six lints run: `field-leak` follows a stored or computed property through its getter and setter;
-`shallow-module` counts methods and free functions but not synthesized accessors; `tangle` finds types that know each
-other in a circle; and `wide-directory` and `long-file` use every source SwiftPM lists, including files with no symbol
-occurrences. Symbols whose only identity is a raw compiler USR and that have no resolved display name are left out,
+The language-neutral lints run: `module-cycle`, `tangle`, `field-leak`, `shallow-module`, `wide-directory`,
+`long-file`, duplicate code and structs, pass-throughs, and the function checks the Swift model can see. The lints
+that read Rust-specific structure—inherent `impl` blocks, crate visibility, serde/DTO markers, Cargo's module graph
+and its width and coupling measures—do not run on a Swift package, because Swift has no equivalents and the report
+would describe the language rather than the design. `field-leak` follows a stored or computed property through its
+getter and setter; `shallow-module` counts methods and free functions but not synthesized accessors; `tangle` finds
+types that know each other in a circle; and `wide-directory` and `long-file` use every source SwiftPM lists, including
+files with no symbol occurrences. Symbols whose only identity is a raw compiler USR and that have no resolved display
+name are left out,
 because the model cannot safely say which type or member they belong to. A symbol also needs a definition range that
 spells its name in the source. Compiler-generated members such as Observation backing fields are left out; synthesized
 accessors remain when their source property is present.

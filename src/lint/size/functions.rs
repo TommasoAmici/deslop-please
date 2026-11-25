@@ -1,11 +1,11 @@
 //! `long-function` and `wide-signature`: ratchetable complexity ceilings on
 //! individual functions that cannot be bypassed by inline `#[allow(...)]`.
 
-use super::{
+use crate::graph::Graph;
+use crate::lint::{
     Diagnostic, HELD_IN_MIND, HygieneLint, Lint, Picture, SizeLint, in_scope, item_location,
     without_generics,
 };
-use crate::graph::Graph;
 use crate::model::{ItemId, ItemKind, Model, NodeId, PositionalTrap};
 
 /// The most lines one non-test function may span before it wants splitting.

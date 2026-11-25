@@ -4,10 +4,10 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use super::{
+use crate::graph::Graph;
+use crate::lint::{
     Diagnostic, Lint, Picture, counted, in_scope, listed, module_location, without_generics,
 };
-use crate::graph::Graph;
 use crate::model::{ItemId, ItemKind, Model, NodeId, NodeKind};
 
 /// The most working free functions one leaf module shows to callers outside it.
@@ -64,7 +64,7 @@ pub fn check(model: &Model, graph: &Graph, scope: Option<NodeId>) -> Vec<Diagnos
         let mut mod_names: Vec<String> = caller_modules.iter().map(|&m| tree.display(m)).collect();
         mod_names.sort();
         diagnostics.push(Diagnostic {
-            lint: Lint::Size(super::SizeLint::WideModule),
+            lint: Lint::Size(crate::lint::SizeLint::WideModule),
             key: name.clone(),
             message: format!(
                 "`{name}` is wide: it shows {} to outsiders, more than {MOST_SHOWN}",

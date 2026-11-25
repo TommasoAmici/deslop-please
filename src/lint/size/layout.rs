@@ -8,13 +8,13 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use super::{Diagnostic, Lint, Location, Picture, in_scope, listed};
+use crate::lint::{Diagnostic, Lint, Location, Picture, in_scope, listed};
 use crate::model::{File, Model, NodeId};
 
-/// The most files and directories one directory holds. Past fifteen names, a
+/// The most files and directories one directory holds. Past twenty names, a
 /// listing is searched rather than read, and its files want directories of
 /// their own, by what they are about.
-const MOST_MEMBERS: usize = 15;
+const MOST_MEMBERS: usize = 20;
 
 /// The most lines one file has. Past 2,000, a file holds parts that want
 /// files of their own.
@@ -64,7 +64,7 @@ fn holders(path: &str) -> impl Iterator<Item = (&str, &str)> {
 
 fn long_file(file: &File) -> Diagnostic {
     Diagnostic {
-        lint: Lint::Size(super::SizeLint::LongFile),
+        lint: Lint::Size(crate::lint::SizeLint::LongFile),
         key: file.path.clone(),
         message: format!(
             "`{}` is long: it has {} lines, more than {MOST_LINES}",
@@ -122,7 +122,7 @@ fn wide_directory(model: &Model, directory: &str, members: &BTreeSet<&str>) -> D
         )
         .next();
     Diagnostic {
-        lint: Lint::Size(super::SizeLint::WideDirectory),
+        lint: Lint::Size(crate::lint::SizeLint::WideDirectory),
         key: shown.to_owned(),
         message: format!(
             "`{shown}` is wide: it holds {} files and directories, more than {MOST_MEMBERS}",
@@ -168,9 +168,9 @@ mod tests {
     }
 
     #[test]
-    fn a_directory_of_more_than_fifteen_files_and_directories_is_wide() {
+    fn a_directory_of_more_than_twenty_files_and_directories_is_wide() {
         let (mut sample, _) = crate_p();
-        for name in letters(14) {
+        for name in letters(19) {
             sample.module(&name);
         }
         assert_eq!(keys(&sample, None), Vec::<String>::new());
@@ -181,7 +181,7 @@ mod tests {
         assert_eq!(wide.key, "src/");
         assert_eq!(
             wide.message,
-            "`src/` is wide: it holds 16 files and directories, more than 15"
+            "`src/` is wide: it holds 21 files and directories, more than 20"
         );
         assert_eq!(
             wide.location,
@@ -193,7 +193,7 @@ mod tests {
         assert_eq!(
             wide.notes,
             [
-                "15 files: a.rs, b.rs, c.rs, d.rs, e.rs, f.rs, g.rs, +8 more",
+                "20 files: a.rs, b.rs, c.rs, d.rs, e.rs, f.rs, g.rs, +13 more",
                 "1 directory: o/",
             ]
         );
@@ -201,8 +201,8 @@ mod tests {
             wide.picture,
             Picture::Bar {
                 label: "holds".into(),
-                length: 16,
-                most: 15
+                length: 21,
+                most: 20
             }
         );
     }
@@ -211,7 +211,7 @@ mod tests {
     fn a_wide_directory_is_found_where_its_modules_are_declared() {
         let (mut sample, _) = crate_p();
         let store = sample.module("store");
-        for name in letters(16) {
+        for name in letters(21) {
             sample.file(store, &format!("src/store/{name}.rs"), 1);
             sample.file(store, &format!("tests/{name}.rs"), 1);
         }
@@ -240,7 +240,7 @@ mod tests {
         for separator in ['/', '\\'] {
             let (mut sample, _) = crate_p();
             let store = sample.module("store");
-            for name in letters(16) {
+            for name in letters(21) {
                 let written = format!("src{separator}store{separator}{name}.rs");
                 sample.file(store, &with_slashes(&written, separator), 1);
             }
@@ -266,7 +266,7 @@ mod tests {
     #[test]
     fn a_wide_directory_concerns_what_is_below_it_and_a_long_file_its_module() {
         let (mut sample, p) = crate_p();
-        let modules: Vec<NodeId> = letters(15).iter().map(|name| sample.module(name)).collect();
+        let modules: Vec<NodeId> = letters(20).iter().map(|name| sample.module(name)).collect();
         sample.model.files[1].lines = 2_001;
         let tree = &mut sample.model.tree;
         let q = tree.child(tree.root(), NodeKind::Package, "q");

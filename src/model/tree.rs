@@ -83,8 +83,24 @@ impl Tree {
         &self.nodes[id.index()]
     }
 
-    pub fn node_mut(&mut self, id: NodeId) -> &mut Node {
-        &mut self.nodes[id.index()]
+    /// The root, made the package Cargo calls `name`: what a workspace whose
+    /// root is a package has instead of a level above it.
+    pub fn root_package(&mut self, name: &str) -> NodeId {
+        let root = self.root();
+        let node = &mut self.nodes[root.index()];
+        node.kind = NodeKind::Package;
+        node.name = name.to_owned();
+        root
+    }
+
+    /// Whether Cargo allows publishing the package `id` is.
+    pub fn set_publish(&mut self, id: NodeId, publish: bool) {
+        self.nodes[id.index()].publish = publish;
+    }
+
+    /// Whether `id` is test code, and so is everything inside it.
+    pub fn set_test(&mut self, id: NodeId, test: bool) {
+        self.nodes[id.index()].test = test;
     }
 
     /// Every node, each after its parent.
@@ -146,5 +162,34 @@ impl Tree {
 impl NodeId {
     fn index(self) -> usize {
         self.0 as usize
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_workspace_whose_root_is_a_package_names_the_root() {
+        let mut tree = Tree::new();
+        assert_eq!(tree.node(tree.root()).kind, NodeKind::Workspace);
+        assert_eq!(tree.root_package("my-crate"), tree.root());
+        assert_eq!(tree.node(tree.root()).kind, NodeKind::Package);
+        assert_eq!(tree.display(tree.root()), "my-crate");
+    }
+
+    #[test]
+    fn a_node_says_what_it_is_marked_and_holds_what_it_says_of_what_it_holds() {
+        let mut tree = Tree::new();
+        let package = tree.child(tree.root(), NodeKind::Package, "p");
+        let module = tree.child(package, NodeKind::Module, "sched");
+        tree.set_publish(package, false);
+        tree.set_test(module, true);
+        assert!(!tree.node(package).publish);
+        assert!(tree.node(module).test);
+        // Test code inside test code is test code, marked or not.
+        let fixtures = tree.child(module, NodeKind::Module, "fixtures");
+        assert!(tree.is_test(fixtures));
+        assert!(!tree.node(fixtures).test);
     }
 }

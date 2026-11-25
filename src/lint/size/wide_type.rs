@@ -7,16 +7,16 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use super::{
+use crate::graph::{Graph, ThingId};
+use crate::lint::{
     Diagnostic, Lint, Picture, counted, full_name, in_scope, item_location, listed,
     without_generics,
 };
-use crate::graph::{Graph, ThingId};
 use crate::model::{ItemId, ItemKind, Model, NodeId};
 
-/// The most working functions one type shows to code outside it. Matches
-/// `wide-directory`'s 15-item limit: past fifteen, a type's interface is
-/// searched rather than read and wants smaller collaborating types.
+/// The most working functions one type shows to code outside it. Past fifteen,
+/// a type's interface is searched rather than read and wants smaller
+/// collaborating types.
 const MOST_SHOWN: usize = 15;
 
 pub fn check(model: &Model, graph: &Graph, scope: Option<NodeId>) -> Vec<Diagnostic> {
@@ -106,7 +106,7 @@ fn diagnostic(
         ),
     ];
     Diagnostic {
-        lint: Lint::Size(super::SizeLint::WideType),
+        lint: Lint::Size(crate::lint::SizeLint::WideType),
         key,
         message: format!(
             "`{type_name}` is wide: it shows {} to outsiders, more than {MOST_SHOWN}",

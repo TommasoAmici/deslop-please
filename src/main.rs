@@ -5,6 +5,7 @@ mod allow;
 mod configuration;
 mod format;
 mod graph;
+mod history;
 mod indexing;
 mod lint;
 mod model;
@@ -67,9 +68,9 @@ shallow-module, wide-type, wide-module, wide-struct, wide-enum, scattered-impl,
 unused-pub, test-only-pub, over-public, single-impl-trait, pass-through,
 reexport-sprawl, long-function, wide-signature, positional-trap, string-error,
 duplicate-code, duplicate-struct, high-fan-out, god-hub, feature-envy,
-layer-violation, unused-dep, wide-directory, long-file) on the Cargo workspace
-or Swift package around the current directory. Rust uses `rust-analyzer scip`;
-Swift uses `scip-swift`.
+layer-violation, unused-dep, call-order, change-spread, wide-directory, long-file)
+on the Cargo workspace or Swift package around the current directory. Rust uses
+`rust-analyzer scip`; Swift uses `scip-swift`.
 
 options:
   <crate_or_mod>               check only one crate, target or directory module

@@ -635,7 +635,7 @@ mod tests {
     fn private_sample() -> Sample {
         let mut sample = Sample::new();
         let p = sample.module("");
-        sample.model.tree.node_mut(p).publish = false;
+        sample.model.tree.set_publish(p, false);
         sample
     }
 

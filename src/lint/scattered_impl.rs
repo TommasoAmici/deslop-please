@@ -237,7 +237,7 @@ mod tests {
     fn single_impl_trait_flags_private_speculative_traits_and_spares_extensions() {
         let mut sample = Sample::new();
         let pkg = sample.module("");
-        sample.model.tree.node_mut(pkg).publish = false;
+        sample.model.tree.set_publish(pkg, false);
         let m = sample.module("engine");
         let solo = sample.item(m, "Solo", ItemKind::Type);
         let ext = sample.item(m, "StrExt", ItemKind::Type);

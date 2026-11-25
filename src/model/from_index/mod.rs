@@ -134,6 +134,8 @@ impl<'a> Builder<'a> {
             serde_types,
             traits,
             trait_impls,
+            // Read from the project's git, which the index knows nothing of.
+            history: Vec::new(),
         }
     }
 
@@ -144,10 +146,7 @@ impl<'a> Builder<'a> {
         let mut placed: Vec<(&str, NodeId)> = Vec::new();
         for package in packages {
             let node = if package.directory.is_empty() {
-                let node = self.tree.node_mut(root);
-                node.kind = NodeKind::Package;
-                node.name = package.crate_name.clone();
-                root
+                self.tree.root_package(&package.crate_name)
             } else {
                 let parent = placed
                     .iter()
@@ -157,7 +156,7 @@ impl<'a> Builder<'a> {
                 self.tree
                     .child(parent, NodeKind::Package, &package.crate_name)
             };
-            self.tree.node_mut(node).publish = package.publish;
+            self.tree.set_publish(node, package.publish);
             placed.push((&package.directory, node));
             self.packages
                 .insert((&package.name, &package.version), node);
@@ -813,11 +812,12 @@ impl<'a> Builder<'a> {
         non_test_modules.extend(ancestors);
         let built_for_tests = self.built_for_tests();
         for id in self.tree.ids() {
-            let node = self.tree.node_mut(id);
-            node.test = node.kind == NodeKind::Module
+            let node = self.tree.node(id);
+            let test = node.kind == NodeKind::Module
                 && (is_test_module(&node.name)
                     || built_for_tests.contains(&id)
                     || (test_modules.contains(&id) && !non_test_modules.contains(&id)));
+            self.tree.set_test(id, test);
         }
         for reference in &mut self.references {
             reference.test =

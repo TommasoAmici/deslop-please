@@ -4,11 +4,11 @@
 
 use std::collections::BTreeMap;
 
-use super::{
+use crate::graph::{Graph, ThingId};
+use crate::lint::{
     Diagnostic, Lint, Picture, counted, full_name, in_scope, item_location, listed,
     without_generics,
 };
-use crate::graph::{Graph, ThingId};
 use crate::model::{ItemId, ItemKind, Model, NodeId};
 
 /// The most non-marker fields one non-serde struct may hold.
@@ -65,7 +65,7 @@ fn check_structs(model: &Model, graph: &Graph, scope: Option<NodeId>) -> Vec<Dia
             .collect();
         names.sort();
         diagnostics.push(Diagnostic {
-            lint: Lint::Size(super::SizeLint::WideStruct),
+            lint: Lint::Size(crate::lint::SizeLint::WideStruct),
             key,
             message: format!(
                 "`{type_name}` is wide: it holds {}, more than {MOST_FIELDS}",
@@ -121,7 +121,7 @@ fn check_enums(model: &Model, graph: &Graph, scope: Option<NodeId>) -> Vec<Diagn
             .collect();
         names.sort();
         diagnostics.push(Diagnostic {
-            lint: Lint::Size(super::SizeLint::WideEnum),
+            lint: Lint::Size(crate::lint::SizeLint::WideEnum),
             key,
             message: format!(
                 "`{type_name}` is wide: it has {}, more than {MOST_VARIANTS}",

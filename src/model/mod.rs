@@ -49,6 +49,18 @@ pub struct Model {
     pub traits: HashSet<ItemId>,
     /// Observed `impl Trait for Type` blocks keyed by the trait's [`ItemId`].
     pub trait_impls: HashMap<ItemId, Vec<TraitImpl>>,
+    /// The commits that touched the code, most recent first. Empty when the
+    /// code's history is not read.
+    pub history: Vec<Commit>,
+}
+
+/// One commit of the code's history, by the files it changed. The record of a
+/// change is the only witness of how the work of a module actually falls
+/// across modules: which decisions change together, whatever the code says.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Commit {
+    /// Relative to the workspace's root, `/`-separated.
+    pub paths: Vec<String>,
 }
 
 /// One `impl Trait for Type` block observed in the workspace.

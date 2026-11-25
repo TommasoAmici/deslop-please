@@ -483,22 +483,22 @@ fn a_long_file_and_a_wide_directory_are_reported_until_they_are_split() {
             std::fs::write(socket.join(format!("part{n}.rs")), part).unwrap();
         }
     };
-    // 2,000 lines, and 15 files: at the most, not past it.
-    parts(13);
+    // 2,000 lines, and 20 files: at the most, not past it.
+    parts(18);
     assert_eq!(keys(&workspace), Vec::<String>::new());
 
-    parts(14);
+    parts(19);
     std::fs::write(&kinds, padded + "pub struct Late;\n").unwrap();
     let result = run(&workspace, &[]);
     assert_eq!(result.code, Some(1));
     assert!(result.stdout.contains(
-        "error[wide-directory]: `src/socket/` is wide: it holds 16 files and directories, \
-         more than 15\n\
+        "error[wide-directory]: `src/socket/` is wide: it holds 21 files and directories, \
+         more than 20\n\
          \x20 --> src/socket/mod.rs:1:1\n\
-         \x20 = note: 16 files: datagram.rs, mod.rs, part1.rs, part10.rs, part11.rs, \
-         part12.rs, part13.rs, +9 more\n\
-         \x20                        15\n\
-         \x20   holds  ███████████████│█ 16\n"
+         \x20 = note: 21 files: datagram.rs, mod.rs, part1.rs, part10.rs, part11.rs, \
+         part12.rs, part13.rs, +14 more\n\
+         \x20                             20\n\
+         \x20   holds  ████████████████████│█ 21\n"
     ));
     assert!(result.stdout.contains(
         "error[long-file]: `src/kinds.rs` is long: it has 2001 lines, more than 2000\n\
@@ -1261,4 +1261,144 @@ fn single_impl_trait_duplicate_struct_positional_trap_god_hub_and_pub_mod_field_
             .any(|k| k == "single-impl-trait core_w::StrExt"),
         "extension trait should not be flagged: {found:?}"
     );
+}
+
+#[test]
+fn two_functions_every_caller_calls_in_one_order_are_the_types_to_keep() {
+    let queue = "pub struct Queue {\n\
+                 \x20   items: Vec<u32>,\n\
+                 }\n\
+                 \n\
+                 impl Queue {\n\
+                 \x20   pub fn new() -> Queue {\n\
+                 \x20       Queue { items: Vec::new() }\n\
+                 \x20   }\n\
+                 }\n\
+                 \n\
+                 pub fn admit(queue: &mut Queue, item: u32) {\n\
+                 \x20   queue.items.push(item);\n\
+                 }\n\
+                 \n\
+                 pub fn next(queue: &mut Queue) -> Option<u32> {\n\
+                 \x20   queue.items.pop()\n\
+                 }\n";
+    let caller = |at: u32| {
+        format!(
+            "pub fn run{at}() -> Option<u32> {{\n\
+             \x20   let mut queue = Queue::new();\n\
+             \x20   queue::admit(&mut queue, {at});\n\
+             \x20   queue::next(&mut queue)\n\
+             }}\n"
+        )
+    };
+    let app = format!(
+        "use crate::queue::{{self, Queue}};\n\n{}{}{}",
+        caller(1),
+        caller(2),
+        caller(3)
+    );
+    let ws = scratch_workspace(
+        "call_order_e2e",
+        &[
+            (
+                "Cargo.toml",
+                "[package]\nname = \"order\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[workspace]\n",
+            ),
+            (
+                "src/lib.rs",
+                "pub mod queue;\n\nmod app;\n\npub use app::{run1, run2, run3};\n",
+            ),
+            ("src/queue/mod.rs", queue),
+            ("src/app.rs", &app),
+        ],
+    );
+    let order = run(&ws, &[]);
+    assert_eq!(order.code, Some(1));
+    assert!(order.stdout.contains(
+        "error[call-order]: `admit` then `next`, in that order in 3 callers, all on a `Queue`: \
+         the sequence belongs in `Queue`"
+    ));
+    assert!(order.stdout.contains(
+        "    order::queue::admit  ━━▶  next\n\
+         \x20     called first by all 3 callers, each on a `Queue`\n"
+    ));
+    assert_eq!(keys(&ws), ["call-order order::queue::admit,next"]);
+
+    // A caller that reaches `next` without `admit`, or before it, keeps no
+    // order of the module's, and two callers agree by accident.
+    let mut alone = app.clone();
+    alone.push_str("\npub fn alone() -> Option<u32> {\n    let mut queue = Queue::new();\n    queue::next(&mut queue)\n}\n");
+    std::fs::write(ws.join("src/app.rs"), &alone).unwrap();
+    assert_eq!(keys(&ws), Vec::<String>::new());
+}
+
+#[test]
+fn two_modules_the_commits_never_change_apart_change_for_one_decision() {
+    let ws = scratch_workspace(
+        "change_spread_e2e",
+        &[
+            (
+                "Cargo.toml",
+                "[package]\nname = \"spread\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[workspace]\n",
+            ),
+            (
+                "src/lib.rs",
+                "mod alpha;\nmod beta;\n\npub use alpha::one;\npub use beta::two;\n",
+            ),
+            ("src/alpha.rs", "pub fn one() -> u32 {\n    1\n}\n"),
+            ("src/beta.rs", "pub fn two() -> u32 {\n    2\n}\n"),
+        ],
+    );
+    let git = |arguments: &[&str]| {
+        let output = Command::new("git")
+            .arg("-C")
+            .arg(&ws)
+            .args(["-c", "user.name=t", "-c", "user.email=t@example.com"])
+            .args(arguments)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "git {arguments:?}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    };
+    // Both modules, in one commit, then five commits that change both of them.
+    git(&["init"]);
+    git(&["add", "-A"]);
+    git(&["commit", "-m", "the two modules as they are"]);
+    for at in 0..5 {
+        for file in ["src/alpha.rs", "src/beta.rs"] {
+            let path = ws.join(file);
+            let mut text = std::fs::read_to_string(&path).unwrap();
+            text.push_str(&format!("// change {at}\n"));
+            std::fs::write(path, text).unwrap();
+        }
+        git(&["commit", "-a", "-m", &format!("change {at}")]);
+    }
+    let spread = run(&ws, &[]);
+    assert_eq!(spread.code, Some(1));
+    assert!(spread.stdout.contains(
+        "error[change-spread]: `spread::alpha` and `spread::beta` change together: 6 of the 6 \
+         commits that change either change both, and neither uses the other"
+    ));
+    assert_eq!(keys(&ws), ["change-spread spread::alpha,spread::beta"]);
+
+    // Two modules whose changes are mostly apart are not a design: one commit
+    // in two is a coincidence, and five of eleven is nearly one.
+    for file in ["src/alpha.rs", "src/beta.rs"] {
+        let path = ws.join(file);
+        let mut text = std::fs::read_to_string(&path).unwrap();
+        text.push_str("// once more\n");
+        std::fs::write(path, text).unwrap();
+    }
+    git(&["commit", "-a", "-m", "both, once more"]);
+    for at in 0..6 {
+        let path = ws.join("src/alpha.rs");
+        let mut text = std::fs::read_to_string(&path).unwrap();
+        text.push_str(&format!("// alpha alone {at}\n"));
+        std::fs::write(path, text).unwrap();
+        git(&["commit", "-a", "-m", &format!("alpha alone {at}")]);
+    }
+    assert_eq!(keys(&ws), Vec::<String>::new());
 }

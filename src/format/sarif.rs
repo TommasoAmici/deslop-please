@@ -14,13 +14,14 @@ use crate::lint::{
 const SCHEMA: &str = "https://json.schemastore.org/sarif-2.1.0.json";
 const VERSION: &str = "2.1.0";
 
-const ALL_LINTS: [Lint; 29] = [
+const ALL_LINTS: [Lint; 31] = [
     Lint::Graph(GraphLint::ModuleCycle),
     Lint::Graph(GraphLint::Tangle),
     Lint::Graph(GraphLint::HighFanOut),
     Lint::Graph(GraphLint::GodHub),
     Lint::Graph(GraphLint::LayerViolation),
     Lint::Graph(GraphLint::UnusedDep),
+    Lint::Graph(GraphLint::ChangeSpread),
     Lint::Encapsulation(EncapsulationLint::FieldLeak),
     Lint::Encapsulation(EncapsulationLint::SharedMutableBag),
     Lint::Encapsulation(EncapsulationLint::ShallowModule),
@@ -28,6 +29,7 @@ const ALL_LINTS: [Lint; 29] = [
     Lint::Encapsulation(EncapsulationLint::FeatureEnvy),
     Lint::Encapsulation(EncapsulationLint::PassThrough),
     Lint::Encapsulation(EncapsulationLint::ReexportSprawl),
+    Lint::Encapsulation(EncapsulationLint::CallOrder),
     Lint::Size(SizeLint::WideType),
     Lint::Size(SizeLint::WideModule),
     Lint::Size(SizeLint::WideStruct),
@@ -103,6 +105,9 @@ fn short_description(lint: Lint) -> &'static str {
         Lint::Graph(GraphLint::GodHub) => "A module both many modules use and that uses many",
         Lint::Graph(GraphLint::LayerViolation) => "A module depends on another in a lower layer",
         Lint::Graph(GraphLint::UnusedDep) => "A declared dependency is never referenced in non-test code",
+        Lint::Graph(GraphLint::ChangeSpread) => {
+            "Two modules the history always changes together, that name nothing in common"
+        }
         Lint::Encapsulation(EncapsulationLint::FieldLeak) => {
             "A struct field is manipulated outside its owning type"
         }
@@ -123,6 +128,9 @@ fn short_description(lint: Lint) -> &'static str {
         }
         Lint::Encapsulation(EncapsulationLint::ReexportSprawl) => {
             "A module re-exports another module's or crate's whole namespace"
+        }
+        Lint::Encapsulation(EncapsulationLint::CallOrder) => {
+            "Two free functions are always called in one order on the same value"
         }
         Lint::Size(SizeLint::WideType) => "A type shows more working functions than a reader can hold in mind",
         Lint::Size(SizeLint::WideModule) => "A leaf module shows more working functions than a reader can scan",

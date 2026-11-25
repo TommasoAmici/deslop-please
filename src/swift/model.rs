@@ -59,7 +59,7 @@ impl<'a> Builder<'a> {
         for target in &workspace.targets {
             let package = tree.child(tree.root(), NodeKind::Package, &target.name);
             if target.test {
-                tree.node_mut(package).test = true;
+                tree.set_test(package, true);
             }
             targets.insert(target.name.clone(), package);
             for source in &target.sources {
@@ -437,9 +437,11 @@ impl<'a> Builder<'a> {
             module_reexports: Vec::new(),
             crate_deps: Vec::new(),
             layers: Vec::new(),
-            serde_types: HashSet::new(),
-            traits: HashSet::new(),
-            trait_impls: HashMap::new(),
+            serde_types: Default::default(),
+            traits: Default::default(),
+            trait_impls: Default::default(),
+            // Read from the package's git, which the index knows nothing of.
+            history: Vec::new(),
         }
     }
 }

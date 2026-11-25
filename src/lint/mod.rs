@@ -1,22 +1,22 @@
 //! The lints. `module-cycle` reads which modules use which, by where code is
 //! written; `tangle`, `field-leak` and `shallow-module` read the graph of
-//! which things know which, wherever they are written; `wide-directory` and
-//! `long-file` read how the files are laid out.
+//! which things know which, wherever they are written; `call-order` reads the
+//! order in which callers call a module's functions; `change-spread` reads the
+//! commits that changed it; `wide-directory` and `long-file` read how the
+//! files are laid out.
 
+mod call_order;
+mod change_spread;
 mod coupling;
 mod cycles;
 mod duplicates;
-mod functions;
-mod layout;
 mod leaks;
 mod pass_through;
 mod scattered_impl;
 mod shallow;
+mod size;
 mod tangles;
 mod visibility;
-mod wide_module;
-mod wide_struct;
-mod wide_type;
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
@@ -48,6 +48,9 @@ pub enum GraphLint {
     GodHub,
     LayerViolation,
     UnusedDep,
+    /// Two modules that the commits always change together, though neither
+    /// uses the other.
+    ChangeSpread,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -59,6 +62,9 @@ pub enum EncapsulationLint {
     FeatureEnvy,
     PassThrough,
     ReexportSprawl,
+    /// Two of a module's free functions over one type, where every caller
+    /// that calls one calls the other first.
+    CallOrder,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -99,6 +105,7 @@ impl Lint {
                 GraphLint::GodHub => "god-hub",
                 GraphLint::LayerViolation => "layer-violation",
                 GraphLint::UnusedDep => "unused-dep",
+                GraphLint::ChangeSpread => "change-spread",
             },
             Lint::Encapsulation(e) => match e {
                 EncapsulationLint::FieldLeak => "field-leak",
@@ -108,6 +115,7 @@ impl Lint {
                 EncapsulationLint::FeatureEnvy => "feature-envy",
                 EncapsulationLint::PassThrough => "pass-through",
                 EncapsulationLint::ReexportSprawl => "reexport-sprawl",
+                EncapsulationLint::CallOrder => "call-order",
             },
             Lint::Size(s) => match s {
                 SizeLint::WideType => "wide-type",
@@ -142,6 +150,7 @@ impl Lint {
             "god-hub" => Some(Lint::Graph(GraphLint::GodHub)),
             "layer-violation" => Some(Lint::Graph(GraphLint::LayerViolation)),
             "unused-dep" => Some(Lint::Graph(GraphLint::UnusedDep)),
+            "change-spread" => Some(Lint::Graph(GraphLint::ChangeSpread)),
             "field-leak" => Some(Lint::Encapsulation(EncapsulationLint::FieldLeak)),
             "shared-mutable-bag" => Some(Lint::Encapsulation(EncapsulationLint::SharedMutableBag)),
             "shallow-module" => Some(Lint::Encapsulation(EncapsulationLint::ShallowModule)),
@@ -149,6 +158,7 @@ impl Lint {
             "feature-envy" => Some(Lint::Encapsulation(EncapsulationLint::FeatureEnvy)),
             "pass-through" => Some(Lint::Encapsulation(EncapsulationLint::PassThrough)),
             "reexport-sprawl" => Some(Lint::Encapsulation(EncapsulationLint::ReexportSprawl)),
+            "call-order" => Some(Lint::Encapsulation(EncapsulationLint::CallOrder)),
             "wide-type" => Some(Lint::Size(SizeLint::WideType)),
             "wide-module" => Some(Lint::Size(SizeLint::WideModule)),
             "wide-struct" => Some(Lint::Size(SizeLint::WideStruct)),
@@ -243,21 +253,23 @@ pub struct Step {
 pub fn check(model: &Model, scope: Option<NodeId>) -> Vec<Diagnostic> {
     let graph = Graph::new(model);
     let mut diagnostics = cycles::check(model, scope);
+    diagnostics.extend(change_spread::check(model, &graph, scope));
     diagnostics.extend(tangles::check(model, &graph, scope));
     diagnostics.extend(leaks::check(model, &graph, scope));
     diagnostics.extend(shallow::check(model, &graph, scope));
-    diagnostics.extend(wide_module::check(model, &graph, scope));
+    diagnostics.extend(call_order::check(model, &graph, scope));
+    diagnostics.extend(size::wide_module::check(model, &graph, scope));
     diagnostics.extend(visibility::check(model, &graph, scope));
     diagnostics.extend(pass_through::check(model, &graph, scope));
-    diagnostics.extend(functions::check(model, &graph, scope));
+    diagnostics.extend(size::functions::check(model, &graph, scope));
     diagnostics.extend(duplicates::check(model, &graph, scope));
-    diagnostics.extend(layout::check(model, scope));
+    diagnostics.extend(size::layout::check(model, scope));
     // These lints read Rust's inherent impls, crate visibility, serde/DTO
     // markers and Cargo's module graph. A Swift package has no equivalents, so
     // running them would report the language rather than the design.
     if model.language == Language::Rust {
-        diagnostics.extend(wide_type::check(model, &graph, scope));
-        diagnostics.extend(wide_struct::check(model, &graph, scope));
+        diagnostics.extend(size::wide_type::check(model, &graph, scope));
+        diagnostics.extend(size::wide_struct::check(model, &graph, scope));
         diagnostics.extend(scattered_impl::check(model, &graph, scope));
         diagnostics.extend(coupling::check(model, &graph, scope));
     }

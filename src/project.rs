@@ -4,7 +4,7 @@ use std::path::Path;
 
 use crate::configuration::Configuration;
 use crate::model::Model;
-use crate::{Error, indexing, scip, swift, workspace};
+use crate::{Error, history, indexing, scip, swift, workspace};
 
 pub enum Project {
     Rust(workspace::Workspace),
@@ -53,10 +53,13 @@ impl Project {
             (Project::Swift(workspace), None) => swift::indexing::index(workspace)?,
         };
         let index = scip::read(&bytes).map_err(|e| Error::new(format!("the SCIP index: {e}")))?;
-        match self {
-            Project::Rust(workspace) => crate::model::build(&index, workspace),
-            Project::Swift(workspace) => swift::model::build(&index, workspace),
-        }
+        let (mut model, root) = match self {
+            Project::Rust(workspace) => (crate::model::build(&index, workspace)?, &workspace.root),
+            Project::Swift(workspace) => (swift::model::build(&index, workspace)?, &workspace.root),
+        };
+        // The index says what the code is; git says how it has been changing.
+        model.history = history::read(root);
+        Ok(model)
     }
 }
 

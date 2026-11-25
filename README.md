@@ -48,12 +48,13 @@ Directories that only group other modules are namespaces, not interfaces of thei
 means two concrete directories in one target use each other's types, not that two Swift modules import each other.
 Test targets are test code and do not form cycles with production code.
 
-The language-neutral lints run: `module-cycle`, `tangle`, `field-leak`, `shallow-module`, `wide-directory`,
-`long-file`, duplicate code and structs, pass-throughs, and the function checks the Swift model can see. The lints
-that read Rust-specific structure—inherent `impl` blocks, crate visibility, serde/DTO markers, Cargo's module graph
-and its width and coupling measures—do not run on a Swift package, because Swift has no equivalents and the report
-would describe the language rather than the design. `field-leak` follows a stored or computed property through its
-getter and setter; `shallow-module` counts methods and free functions but not synthesized accessors; `tangle` finds
+The language-neutral lints run: `module-cycle`, `tangle`, `field-leak`, `shallow-module`, `change-spread`,
+`wide-directory`, `long-file`, duplicate code and structs, pass-throughs, and the function checks the Swift model can
+see. The lints that read Rust-specific structure—inherent `impl` blocks, crate visibility, serde/DTO markers, Cargo's
+module graph and its width and coupling measures—do not run on a Swift package, because Swift has no equivalents and
+the report would describe the language rather than the design. `call-order` does not run either, though nothing about
+it is Rust's: it reads the type a free function works on, which the Swift model does not record. `field-leak` follows
+a stored or computed property through its getter and setter; `shallow-module` counts methods and free functions but not synthesized accessors; `tangle` finds
 types that know each other in a circle; and `wide-directory` and `long-file` use every source SwiftPM lists, including
 files with no symbol occurrences. Symbols whose only identity is a raw compiler USR and that have no resolved display
 name are left out,
@@ -95,6 +96,7 @@ deslop-please --allow .deslop-please.allow
 -  Errors flagged by `deslop-please` must be fixed from first principles, don't do mechanical moves to hide them.
     - `module-cycle` & `tangle`: what is the indented layer of abstraction? Which module should be at which layer?
     - `field-leak` & `shallow-module`: Why we have these fields/functions at all? What are the patterns of use? Can they be hidden behind a narrow interface? Don't fix each leak one at a time, fix them holistically.
+    - `call-order` & `change-spread`: name the design decision each of the two modules hides. If there is one decision between them, it wants one module; if one of them hides nothing, it is a step in a flowchart, not a module.
     - Draw a diagram to help user understand the before and proposed after structure.
 ```
 
@@ -103,6 +105,8 @@ deslop-please --allow .deslop-please.allow
 They are really just one single idea: **deep** modules, **narrow** interfaces.
 
 Deep modules hide the attention for you and your agents, so you only need to care about the narrow interface.
+
+Hidden *what*? Parnas answered in 1972, in [*On the Criteria To Be Used in Decomposing Systems into Modules*](https://www.cs.colostate.edu/~france/CS314/Readings/Parnas-decomposition.pdf): begin with the list of design decisions that are difficult or likely to change, and let every module hide one. A module that hides no decision is a step in a flowchart with a filename, and it is the flowchart, not the design, that decides where its boundary falls. So of each module ask: *what does this keep from its callers?* `field-leak` asks it of a field, `call-order` of a sequence, and `change-spread` of a commit.
 
 ### module-cycle
 
@@ -121,6 +125,32 @@ Deep modules hide the attention for you and your agents, so you only need to car
 
 
 ![shallow-module: before, app calls 9 of the 15 functions of store; after, it calls new, load and summary, and the rest are hidden behind them](docs/shallow-module.svg)
+
+### call-order
+
+```bash
+error[call-order]: `admit` then `next`, in that order in 3 callers, all on a `Queue`: the sequence belongs in `Queue`
+  --> src/app.rs:5:1
+  = note: every caller that calls `next` calls `admit` first: none calls `next` alone, or before it
+  = note: as methods of `Queue`, what they do to it between them is the type's to keep
+    order::queue::admit  ━━▶  next
+      called first by all 3 callers, each on a `Queue`
+```
+
+Two free functions that work on the same value, and that every caller calls in one order, keep a state the module never names: the caller that gets the order wrong is not told. A method's receiver carries the order it is called in, so the same two as methods keep it where it belongs. Folding them into one function does too. Parnas's own example was `CSSETUP`, which every caller of the line storage module had to call before the rest.
+
+### change-spread
+
+```bash
+error[change-spread]: `spread::alpha` and `spread::beta` change together: 6 of the 6 commits that change either change both, and neither uses the other
+  --> src/alpha.rs:1:1
+  = note: no reference either way: the decision they change for has no module of its own
+  = note: the change wants one module, or the line between `spread::alpha` and `spread::beta` is wrong
+                    6
+    together  ██████│ 6
+```
+
+A module is the work one person does because one decision changed. Two modules whose changes are never apart, and that name nothing in common, hold a decision between them that neither hides: the boundary runs through the middle of it. Nothing in the code shows this, because neither module names the other; only the commits do. It reads git history, so a workspace that is not a git checkout, or a machine without git, has nothing to report.
 
 ## License
 

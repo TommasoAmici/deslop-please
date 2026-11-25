@@ -15,7 +15,7 @@ use crate::model::{
 use crate::scip::{Index, SymbolInformation};
 use crate::swift::Workspace;
 use crate::swift::source::{Body, Encoding, Source};
-use crate::swift::symbol::{Name, parse};
+use crate::swift::symbol::{Name, first_parameter_type, parse};
 use crate::workspace::TargetKind;
 
 pub fn build(index: &Index, workspace: &Workspace) -> Result<Model, Error> {
@@ -231,6 +231,11 @@ impl<'a> Builder<'a> {
                 KIND_CONSTRUCTOR | KIND_STATIC_METHOD
             );
         let id = self.push(named, kind, parent, takes_self);
+        if parent.is_none() && kind == ItemKind::Function {
+            let worked_on = first_parameter_type(named.information.display_name)
+                .and_then(|written| self.type_named(&named.name.module, &written));
+            self.items[id.index()].first_param_type = worked_on;
+        }
         self.items_by_name
             .insert((named.name.module.clone(), named.name.item()), id);
         self.symbols.insert(named.information.symbol.to_owned(), id);
@@ -311,6 +316,24 @@ impl<'a> Builder<'a> {
         self.items_by_name
             .get(&(module.to_owned(), name.to_owned()))
             .copied()
+    }
+
+    /// The type an index spells, found in this package: `App.Queue`, or
+    /// `App.Model.Nested` for a type inside a type. A name the index did not
+    /// qualify is looked for in the module that declared it.
+    fn type_named(&self, module: &str, written: &str) -> Option<ItemId> {
+        let (module, path) = written
+            .split_once('.')
+            .map_or((module, written), |(qualifier, path)| (qualifier, path));
+        let parts: Vec<&str> = path
+            .split('.')
+            .map(|part| part.trim_matches('`'))
+            .filter(|part| !part.is_empty())
+            .collect();
+        (1..=parts.len()).rev().find_map(|depth| {
+            let item = parts[..depth].join("::");
+            self.items_by_name.get(&(module.to_owned(), item)).copied()
+        })
     }
 
     fn read_documents(&mut self, index: &Index) -> Result<(), Error> {
@@ -760,6 +783,89 @@ mod tests {
         };
         let model = build(&index, &workspace).unwrap();
         assert!(model.references.is_empty());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn two_free_functions_every_caller_calls_in_one_order_are_the_types_to_keep() {
+        const ORDERED: &str = "func admit(_ queue: Queue) {\n    queue.count()\n}\n\nfunc next(_ queue: Queue) -> Int? {\n    queue.pop()\n}\n";
+        const RUNNERS: &str = "func run1() -> Int? {\n    let queue = Queue()\n    admit(queue)\n    next(queue)\n}\n\nfunc run2() -> Int? {\n    let queue = Queue()\n    admit(queue)\n    next(queue)\n}\n\nfunc run3() -> Int? {\n    let queue = Queue()\n    admit(queue)\n    next(queue)\n}\n";
+        let root = std::env::temp_dir().join(format!("deslop-swift-{}-order", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        for directory in ["Model", "Policy", "Use"] {
+            std::fs::create_dir_all(root.join("Sources/App").join(directory)).unwrap();
+        }
+        std::fs::write(root.join("Sources/App/Model/Queue.swift"), QUEUE).unwrap();
+        std::fs::write(root.join("Sources/App/Policy/Ordered.swift"), ORDERED).unwrap();
+        std::fs::write(root.join("Sources/App/Use/Runners.swift"), RUNNERS).unwrap();
+        let workspace = Workspace {
+            root: root.clone(),
+            build_directory: root.join(".build"),
+            targets: vec![Target {
+                name: "App".to_owned(),
+                directory: "Sources/App".to_owned(),
+                sources: vec![
+                    "Model/Queue.swift".to_owned(),
+                    "Policy/Ordered.swift".to_owned(),
+                    "Use/Runners.swift".to_owned(),
+                ],
+                test: false,
+            }],
+        };
+        let queue = "scip-swift swiftpm App . Queue#";
+        let admit = "scip-swift swiftpm App . admit().";
+        let next = "scip-swift swiftpm App . next().";
+        let run1 = "scip-swift swiftpm App . run1().";
+        let run2 = "scip-swift swiftpm App . run2().";
+        let run3 = "scip-swift swiftpm App . run3().";
+        let mut caller_occurrences = Vec::new();
+        for (at_caller, name, symbol) in [(0, "run1", run1), (1, "run2", run2), (2, "run3", run3)] {
+            caller_occurrences.push(occurrence(symbol, at(RUNNERS, name), true));
+            caller_occurrences.push(occurrence(
+                admit,
+                at_nth(RUNNERS, "admit(", at_caller),
+                false,
+            ));
+            caller_occurrences.push(occurrence(next, at_nth(RUNNERS, "next(", at_caller), false));
+        }
+        let index = Index {
+            documents: vec![
+                Document {
+                    path: Cow::Borrowed("Sources/App/Model/Queue.swift"),
+                    position_encoding: 1,
+                    symbols: vec![symbol(queue, "App.Queue", KIND_STRUCT)],
+                    occurrences: vec![occurrence(queue, at(QUEUE, "Queue"), true)],
+                },
+                Document {
+                    path: Cow::Borrowed("Sources/App/Policy/Ordered.swift"),
+                    position_encoding: 1,
+                    symbols: vec![
+                        symbol(admit, "App.admit(_: App.Queue) -> ()", KIND_FUNCTION),
+                        symbol(next, "App.next(_: App.Queue) -> Swift.Int?", KIND_FUNCTION),
+                    ],
+                    occurrences: vec![
+                        occurrence(admit, at(ORDERED, "admit"), true),
+                        occurrence(next, at(ORDERED, "next"), true),
+                    ],
+                },
+                Document {
+                    path: Cow::Borrowed("Sources/App/Use/Runners.swift"),
+                    position_encoding: 1,
+                    symbols: vec![
+                        symbol(run1, "App.run1() -> Swift.Int?", KIND_FUNCTION),
+                        symbol(run2, "App.run2() -> Swift.Int?", KIND_FUNCTION),
+                        symbol(run3, "App.run3() -> Swift.Int?", KIND_FUNCTION),
+                    ],
+                    occurrences: caller_occurrences,
+                },
+            ],
+        };
+        let model = build(&index, &workspace).unwrap();
+        let keys = keys(&model);
+        assert!(
+            keys.contains(&"call-order App::Policy::admit,next".to_owned()),
+            "{keys:?}"
+        );
         std::fs::remove_dir_all(root).unwrap();
     }
 

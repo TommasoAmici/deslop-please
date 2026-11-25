@@ -76,6 +76,89 @@ fn display(display: &str, module: &str) -> Option<Vec<String>> {
     (!path.is_empty()).then_some(path)
 }
 
+/// The type a declaration's first parameter is written as, spelled the way
+/// `scip-swift` spells it: `App.Queue` for `_ queue: Queue`, `App.State` for
+/// `inout State`, `Swift.Int` for `count: Int`. `None` for a parameter that is
+/// not one name — an array, a tuple, a closure — and for a declaration that
+/// takes none.
+pub fn first_parameter_type(display_name: &str) -> Option<String> {
+    let display = without_private_names(display_name.trim());
+    let open = display.find('(')?;
+    let parameters = &display[open + 1..];
+    let first = first_argument(&parameters[..matching_paren(parameters)?]);
+    // A labeled parameter is `count: Swift.Int`; one with no external label is
+    // written as the type alone, `App.admit(App.Queue)`.
+    let written = first.split_once(':').map_or(first, |(_, written)| written);
+    bare_type(written.split('=').next()?)
+}
+
+/// The text of a parameter list before the comma that ends its first parameter.
+fn first_argument(parameters: &str) -> &str {
+    let mut depth = 0i32;
+    for (at, byte) in parameters.bytes().enumerate() {
+        match byte {
+            b'(' | b'[' | b'<' | b'{' => depth += 1,
+            b')' | b']' | b'>' | b'}' => depth -= 1,
+            b',' if depth == 0 => return &parameters[..at],
+            _ => {}
+        }
+    }
+    parameters
+}
+
+/// The text before the `)` that closes the parameter list it opens.
+fn matching_paren(parameters: &str) -> Option<usize> {
+    let mut depth = 0i32;
+    for (at, byte) in parameters.bytes().enumerate() {
+        match byte {
+            b'(' => depth += 1,
+            b')' if depth == 0 => return Some(at),
+            b')' => depth -= 1,
+            _ => {}
+        }
+    }
+    None
+}
+
+/// A written parameter type without what does not name the type: its ownership
+/// modifier, its attribute, its generic arguments and its optional marker.
+fn bare_type(written: &str) -> Option<String> {
+    let mut text = written.trim();
+    while let Some((word, rest)) = text.split_once(' ') {
+        if !word.starts_with('@') && !is_ownership(word) {
+            break;
+        }
+        text = rest.trim_start();
+    }
+    for wrapper in ["Swift.Optional<", "Swift.ImplicitlyUnwrappedOptional<"] {
+        if let Some(inner) = text.strip_prefix(wrapper) {
+            return bare_type(&inner[..inner.rfind('>')?]);
+        }
+    }
+    let base = text
+        .split('<')
+        .next()?
+        .trim_end_matches(['?', '!', '.', ' ']);
+    is_type_name(base).then(|| base.trim_matches('`').to_owned())
+}
+
+fn is_ownership(word: &str) -> bool {
+    matches!(
+        word,
+        "inout" | "borrowing" | "consuming" | "isolated" | "some" | "any" | "__owned" | "__shared"
+    )
+}
+
+/// A name the model can resolve: `Queue`, `App.Queue`, `App.Model.Nested`.
+fn is_type_name(text: &str) -> bool {
+    text.chars()
+        .next()
+        .is_some_and(|first| first.is_alphabetic() || first == '`')
+        && text
+            .chars()
+            .all(|character| character.is_alphanumeric() || matches!(character, '_' | '`' | '.'))
+}
+
 fn clean_part(part: &str) -> String {
     let part = part.strip_suffix("()").unwrap_or(part);
     let part = part.strip_suffix('.').unwrap_or(part);
@@ -180,5 +263,46 @@ mod tests {
     fn locals_and_raw_usr_fallbacks_are_not_items() {
         assert!(parse("local count", "count").is_none());
         assert!(parse("scip-swift swiftpm ClapCore . `s:SiySiSdcfc`.", "Swift...").is_none());
+    }
+
+    #[test]
+    fn the_first_parameter_names_the_type_a_function_works_on() {
+        let cases = [
+            ("App.admit(_: App.Queue) -> ()", Some("App.Queue")),
+            ("App.admit(App.Queue) -> ()", Some("App.Queue")),
+            (
+                "App.admit(App.Queue, count: Swift.Int) throws -> ()",
+                Some("App.Queue"),
+            ),
+            (
+                "App.admit(queue: App.Queue, item: Swift.Int) -> ()",
+                Some("App.Queue"),
+            ),
+            ("App.clear(_: inout App.State) -> ()", Some("App.State")),
+            ("App.count(of: App.Queue?) -> Swift.Int", Some("App.Queue")),
+            (
+                "App.take(_: Swift.Optional<App.Queue>) -> ()",
+                Some("App.Queue"),
+            ),
+            (
+                "App.(writeNoise in _5ACDF8EF5915523861A3FABDACAADF13)(_: App.Queue, rate: Swift.Double) throws -> ()",
+                Some("App.Queue"),
+            ),
+            (
+                "App.Model.Nested.save(_: App.Model.Nested) -> ()",
+                Some("App.Model.Nested"),
+            ),
+            ("App.fill(_: [Swift.Float], from: Swift.Int) -> ()", None),
+            ("App.run(_: @escaping (Swift.Int) -> Swift.Int) -> ()", None),
+            ("App.save() -> ()", None),
+            ("App.Queue.items.getter : [Swift.Int]", None),
+        ];
+        for (display, expected) in cases {
+            assert_eq!(
+                first_parameter_type(display).as_deref(),
+                expected,
+                "{display}"
+            );
+        }
     }
 }

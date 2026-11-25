@@ -78,6 +78,10 @@ fn a_swift_package_is_indexed_and_an_external_scip_index_gives_the_same_report()
         "{keys}"
     );
     assert!(
+        keys.contains("call-order App::Policy::admit,next"),
+        "a free function's first parameter names the type it works on: {keys}"
+    );
+    assert!(
         !keys.contains("field-leak App::Observed::value")
             && !keys.contains("field-leak App::Observed::isSet")
             && !keys.contains("field-leak App::Counter::value"),

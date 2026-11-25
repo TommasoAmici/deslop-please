@@ -49,11 +49,12 @@ means two concrete directories in one target use each other's types, not that tw
 Test targets are test code and do not form cycles with production code.
 
 The language-neutral lints run: `module-cycle`, `tangle`, `field-leak`, `shallow-module`, `change-spread`,
-`wide-directory`, `long-file`, duplicate code and structs, pass-throughs, and the function checks the Swift model can
-see. The lints that read Rust-specific structure—inherent `impl` blocks, crate visibility, serde/DTO markers, Cargo's
-module graph and its width and coupling measures—do not run on a Swift package, because Swift has no equivalents and
-the report would describe the language rather than the design. `call-order` does not run either, though nothing about
-it is Rust's: it reads the type a free function works on, which the Swift model does not record. `field-leak` follows
+`wide-directory`, `long-file`, `call-order`, duplicate code and structs, pass-throughs, and the function checks the
+Swift model can see. The lints that read Rust-specific structure—inherent `impl` blocks, crate visibility, serde/DTO
+markers, Cargo's module graph and its width and coupling measures—do not run on a Swift package, because Swift has no
+equivalents and the report would describe the language rather than the design. `call-order` and `wide-type` read the
+type a free function's first parameter is written as, which `scip-swift` spells in the declaration's display name:
+`App.admit(App.Queue)` and `App.transform(_: inout App.State)` both name `Queue` and `State`. `field-leak` follows
 a stored or computed property through its getter and setter; `shallow-module` counts methods and free functions but not synthesized accessors; `tangle` finds
 types that know each other in a circle; and `wide-directory` and `long-file` use every source SwiftPM lists, including
 files with no symbol occurrences. Symbols whose only identity is a raw compiler USR and that have no resolved display

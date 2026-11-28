@@ -201,10 +201,25 @@ fn sarif_output_reports_diagnostics() {
     );
     let run_obj = &value["runs"][0];
     assert_eq!(run_obj["tool"]["driver"]["name"], TOOL);
-    assert_eq!(
-        run_obj["tool"]["driver"]["rules"].as_array().unwrap().len(),
-        6
-    );
+    let rules = run_obj["tool"]["driver"]["rules"].as_array().unwrap();
+    let ids: Vec<&str> = rules
+        .iter()
+        .map(|rule| rule["id"].as_str().unwrap())
+        .collect();
+    let mut unique = ids.clone();
+    unique.sort_unstable();
+    unique.dedup();
+    assert_eq!(ids.len(), unique.len(), "each lint has one rule: {ids:?}");
+    for lint in [
+        "module-cycle",
+        "tangle",
+        "field-leak",
+        "shallow-module",
+        "wide-directory",
+        "long-file",
+    ] {
+        assert!(ids.contains(&lint), "{lint} has no rule: {ids:?}");
+    }
     assert_eq!(run_obj["results"], serde_json::json!([]));
 
     let leak_workspace = workspace("field_leak", None, "sarif-field-leak");

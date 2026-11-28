@@ -379,7 +379,10 @@ impl<'a> Builder<'a> {
                 })
                 .collect();
             for (item, start, range, enclosing) in accessor_ranges {
-                if let Some(definition) = definitions.iter_mut().find(|(_, defined, _, _)| *defined == item) {
+                if let Some(definition) = definitions
+                    .iter_mut()
+                    .find(|(_, defined, _, _)| *defined == item)
+                {
                     *definition = (start, item, range, enclosing);
                 }
             }
@@ -398,9 +401,11 @@ impl<'a> Builder<'a> {
                     .unwrap_or(source.len());
                 // The declaration's braces or expression are the reliable body. An indexer's enclosing
                 // range can cover only the expression, leaving its first name outside the range.
-                let body = source
-                    .body_after(*range, limit)
-                    .or_else(|| enclosing.and_then(|enclosing| source.range(enclosing)).map(|range| Body { range }));
+                let body = source.body_after(*range, limit).or_else(|| {
+                    enclosing
+                        .and_then(|enclosing| source.range(enclosing))
+                        .map(|range| Body { range })
+                });
                 if let Some(body) = body {
                     bodies.push((body, item.index()));
                 }

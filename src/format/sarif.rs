@@ -104,7 +104,9 @@ fn short_description(lint: Lint) -> &'static str {
         Lint::Graph(GraphLint::HighFanOut) => "A module references too many other modules",
         Lint::Graph(GraphLint::GodHub) => "A module both many modules use and that uses many",
         Lint::Graph(GraphLint::LayerViolation) => "A module depends on another in a lower layer",
-        Lint::Graph(GraphLint::UnusedDep) => "A declared dependency is never referenced in non-test code",
+        Lint::Graph(GraphLint::UnusedDep) => {
+            "A declared dependency is never referenced in non-test code"
+        }
         Lint::Graph(GraphLint::ChangeSpread) => {
             "Two modules the history always changes together, that name nothing in common"
         }
@@ -132,10 +134,18 @@ fn short_description(lint: Lint) -> &'static str {
         Lint::Encapsulation(EncapsulationLint::CallOrder) => {
             "Two free functions are always called in one order on the same value"
         }
-        Lint::Size(SizeLint::WideType) => "A type shows more working functions than a reader can hold in mind",
-        Lint::Size(SizeLint::WideModule) => "A leaf module shows more working functions than a reader can scan",
-        Lint::Size(SizeLint::WideStruct) => "A struct has more fields than a reader can scan at once",
-        Lint::Size(SizeLint::WideEnum) => "An enum has more variants than a reader can scan at once",
+        Lint::Size(SizeLint::WideType) => {
+            "A type shows more working functions than a reader can hold in mind"
+        }
+        Lint::Size(SizeLint::WideModule) => {
+            "A leaf module shows more working functions than a reader can scan"
+        }
+        Lint::Size(SizeLint::WideStruct) => {
+            "A struct has more fields than a reader can scan at once"
+        }
+        Lint::Size(SizeLint::WideEnum) => {
+            "An enum has more variants than a reader can scan at once"
+        }
         Lint::Size(SizeLint::LongFunction) => {
             "A function is longer or branches more than a reader can hold in mind"
         }
@@ -145,14 +155,24 @@ fn short_description(lint: Lint) -> &'static str {
         Lint::Size(SizeLint::PositionalTrap) => {
             "A function takes several parameters whose type and order decide their meaning"
         }
-        Lint::Size(SizeLint::WideDirectory) => "A directory holds too many files and subdirectories",
+        Lint::Size(SizeLint::WideDirectory) => {
+            "A directory holds too many files and subdirectories"
+        }
         Lint::Size(SizeLint::LongFile) => "A source file exceeds the maximum line count",
-        Lint::Surface(SurfaceLint::UnusedPub) => "A `pub` item has no non-test callers outside its library",
+        Lint::Surface(SurfaceLint::UnusedPub) => {
+            "A `pub` item has no non-test callers outside its library"
+        }
         Lint::Surface(SurfaceLint::TestOnlyPub) => "A restricted item is only referenced by tests",
-        Lint::Surface(SurfaceLint::OverPublic) => "A `pub` item is only used inside its own library",
+        Lint::Surface(SurfaceLint::OverPublic) => {
+            "A `pub` item is only used inside its own library"
+        }
         Lint::Surface(SurfaceLint::SingleImplTrait) => "A trait has one implementation or fewer",
-        Lint::Hygiene(HygieneLint::StringError) => "A function returns a stringly-typed `Result<_, String>`",
-        Lint::Hygiene(HygieneLint::DuplicateCode) => "Two functions share an identical normalized body",
+        Lint::Hygiene(HygieneLint::StringError) => {
+            "A function returns a stringly-typed `Result<_, String>`"
+        }
+        Lint::Hygiene(HygieneLint::DuplicateCode) => {
+            "Two functions share an identical normalized body"
+        }
         Lint::Hygiene(HygieneLint::DuplicateStruct) => "Two structs have the same fields",
     }
 }
@@ -354,6 +374,9 @@ mod tests {
         let result = &value["runs"][0]["results"][0];
         assert!(result.get("locations").is_none());
         assert!(result.get("relatedLocations").is_none());
-        assert_eq!(result["ruleIndex"], rule_index(Lint::Encapsulation(EncapsulationLint::ShallowModule)));
+        assert_eq!(
+            result["ruleIndex"],
+            rule_index(Lint::Encapsulation(EncapsulationLint::ShallowModule))
+        );
     }
 }

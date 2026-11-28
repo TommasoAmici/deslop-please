@@ -186,13 +186,17 @@ fn parse_arguments(arguments: &[String]) -> Result<Options, Error> {
             "--no-default-features" => configuration.no_default_features(),
             "--json" => {
                 if options.format == OutputFormat::Sarif {
-                    return Err(Error::new("'--json' and '--sarif' cannot be given together"));
+                    return Err(Error::new(
+                        "'--json' and '--sarif' cannot be given together",
+                    ));
                 }
                 options.format = OutputFormat::Json;
             }
             "--sarif" => {
                 if options.format == OutputFormat::Json {
-                    return Err(Error::new("'--json' and '--sarif' cannot be given together"));
+                    return Err(Error::new(
+                        "'--json' and '--sarif' cannot be given together",
+                    ));
                 }
                 options.format = OutputFormat::Sarif;
             }
@@ -211,10 +215,14 @@ fn parse_arguments(arguments: &[String]) -> Result<Options, Error> {
         match options.format {
             OutputFormat::Text => {}
             OutputFormat::Json => {
-                return Err(Error::new("'--json' and '--update-allow' cannot be given together"));
+                return Err(Error::new(
+                    "'--json' and '--update-allow' cannot be given together",
+                ));
             }
             OutputFormat::Sarif => {
-                return Err(Error::new("'--sarif' and '--update-allow' cannot be given together"));
+                return Err(Error::new(
+                    "'--sarif' and '--update-allow' cannot be given together",
+                ));
             }
         }
     }

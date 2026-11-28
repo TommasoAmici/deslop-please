@@ -132,6 +132,10 @@ impl<'a> Builder<'a> {
             crate_deps,
             layers: self.workspace.layers.clone(),
             serde_types,
+            // Rust's model does not separate value types; the Rust lints keep
+            // the upstream behaviour.
+            value_types: Default::default(),
+            abstract_types: Default::default(),
             traits,
             trait_impls,
             // Read from the project's git, which the index knows nothing of.

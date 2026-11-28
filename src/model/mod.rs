@@ -45,6 +45,13 @@ pub struct Model {
     pub layers: Vec<Vec<String>>,
     /// Structs/enums deriving `Serialize` or `Deserialize`.
     pub serde_types: HashSet<ItemId>,
+    /// Types whose instances are copied on assignment, so a field written
+    /// through one value is never shared with another: Swift structs and
+    /// enums. Empty for languages whose front end does not say.
+    pub value_types: HashSet<ItemId>,
+    /// Protocol and interface declarations: their members have no storage of
+    /// their own, so a use of one is not a use of a field.
+    pub abstract_types: HashSet<ItemId>,
     /// Workspace `trait` items.
     pub traits: HashSet<ItemId>,
     /// Observed `impl Trait for Type` blocks keyed by the trait's [`ItemId`].

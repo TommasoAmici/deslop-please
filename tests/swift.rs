@@ -93,6 +93,24 @@ fn a_swift_package_is_indexed_and_an_external_scip_index_gives_the_same_report()
             && !keys.contains("field-leak App::Model::Guarded::doubled"),
         "extension methods and property accessors are part of their type, even in another directory: {keys}"
     );
+    assert!(
+        !keys.contains("field-leak App::Model::Config::name")
+            && !keys.contains("field-leak App::Model::Config::values")
+            && !keys.contains("field-leak App::Model::Tagged::label"),
+        "reading a `let`, even to call a method on what it holds, is a copy: {keys}"
+    );
+    assert!(
+        !keys.contains("field-leak App::Model::Labeled::label"),
+        "a protocol requirement has no storage of its own: {keys}"
+    );
+    assert!(
+        !keys.contains("field-leak App::Model::Failure::message"),
+        "`!=` compares the value a getter read, it does not reach through it: {keys}"
+    );
+    assert!(
+        !keys.contains("shared-mutable-bag App::Model::Config"),
+        "a struct is copied at every assignment, so its fields are not shared: {keys}"
+    );
 
     let index = find_index(&workspace.join(".build/deslop-please")).unwrap();
     let external_allow = workspace.with_extension("external.allow");

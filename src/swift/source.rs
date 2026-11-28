@@ -168,9 +168,10 @@ impl Source {
             })
     }
 
-    /// A getter's value is only read when the code does not immediately reach
-    /// through it: `queue.count` reads a number, `queue.items.append` works on
-    /// the collection, and `queue.items[0]` indexes it.
+    /// A getter's value, or a stored property's, is only read when the code
+    /// does not immediately reach through it: `queue.count` reads a number,
+    /// `queue.items.append` works on the collection, and `queue.items[0]`
+    /// indexes it. `failure.message != nil` compares the value it read.
     pub fn only_reads(&self, range: Range) -> bool {
         let Some(end) = self.offset(range.end) else {
             return false;
@@ -178,7 +179,26 @@ impl Source {
         let Some(next) = self.next_code(end, self.code.len()) else {
             return true;
         };
-        !matches!(self.code[next], b'.' | b'[' | b'(' | b'?' | b'!')
+        match self.code[next] {
+            b'!' => self.code.get(next + 1) == Some(&b'='),
+            b'.' | b'[' | b'(' | b'?' => false,
+            _ => true,
+        }
+    }
+
+    /// Whether the declaration whose name starts at `range` says `let`, so no
+    /// code can assign it. Available Swift writes `let`/`var` before the name
+    /// on the same line.
+    pub fn declares_let(&self, range: Range) -> bool {
+        let Some(start) = self.offset(range.start) else {
+            return false;
+        };
+        let line_start = self.text[..start].rfind('\n').map_or(0, |at| at + 1);
+        let head = String::from_utf8_lossy(&self.code[line_start..start]);
+        head.split(|c: char| !c.is_alphanumeric() && c != '_')
+            .filter(|word| *word == "let" || *word == "var")
+            .last()
+            == Some("let")
     }
 
     fn next_code(&self, mut at: usize, limit: usize) -> Option<usize> {

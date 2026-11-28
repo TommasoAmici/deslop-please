@@ -48,6 +48,12 @@ struct Builder<'a> {
     /// The source property each synthesized accessor belongs to.
     accessor_properties: HashMap<ItemId, ItemId>,
     kinds: HashMap<String, u64>,
+    /// Structs and enums, whose instances are copied.
+    value_types: HashSet<ItemId>,
+    /// Protocols and interfaces, whose members have no storage.
+    abstract_types: HashSet<ItemId>,
+    /// Fields declared `let`, which no code can assign.
+    immutable_fields: HashSet<ItemId>,
 }
 
 impl<'a> Builder<'a> {
@@ -96,11 +102,15 @@ impl<'a> Builder<'a> {
             symbols: HashMap::new(),
             accessor_properties: HashMap::new(),
             kinds: HashMap::new(),
+            value_types: HashSet::new(),
+            abstract_types: HashSet::new(),
+            immutable_fields: HashSet::new(),
         })
     }
 
     fn read_symbols(&mut self, index: &Index) -> Result<(), Error> {
         let mut named = Vec::new();
+        let mut let_symbols = HashSet::new();
         for document in &index.documents {
             let Some(&file) = self.files_by_path.get(&*document.path) else {
                 continue;
@@ -123,6 +133,9 @@ impl<'a> Builder<'a> {
                         .entry(occurrence.symbol)
                         .or_default()
                         .push(occurrence.range);
+                    if source.declares_let(occurrence.range) {
+                        let_symbols.insert(occurrence.symbol.to_owned());
+                    }
                 }
             }
             let mut source_backed = HashSet::new();
@@ -194,6 +207,14 @@ impl<'a> Builder<'a> {
                 self.add_accessor(named);
             }
         }
+        for symbol in let_symbols {
+            let Some(&item) = self.symbols.get(&symbol) else {
+                continue;
+            };
+            if self.items[item.index()].kind == ItemKind::Field {
+                self.immutable_fields.insert(item);
+            }
+        }
         Ok(())
     }
 
@@ -208,6 +229,15 @@ impl<'a> Builder<'a> {
         self.symbols.insert(named.information.symbol.to_owned(), id);
         self.kinds
             .insert(named.information.symbol.to_owned(), named.information.kind);
+        if matches!(named.information.kind, KIND_STRUCT | KIND_ENUM) {
+            self.value_types.insert(id);
+        }
+        if matches!(
+            named.information.kind,
+            KIND_INTERFACE | KIND_PROTOCOL | KIND_TRAIT
+        ) {
+            self.abstract_types.insert(id);
+        }
     }
 
     fn add_item(&mut self, named: &Named) {
@@ -434,9 +464,22 @@ impl<'a> Builder<'a> {
                         continue;
                     }
                 }
+                let property = self.accessor_properties.get(&item).copied().unwrap_or(item);
+                let model_item = &self.items[property.index()];
+                let requirement = model_item
+                    .parent
+                    .is_some_and(|parent| self.abstract_types.contains(&parent));
                 let copies = !occurrence.write
-                    && matches!(kind, KIND_GETTER | KIND_PROPERTY | KIND_STATIC_PROPERTY)
-                    && source.only_reads(occurrence.range);
+                    && (requirement
+                        || self.immutable_fields.contains(&property)
+                        || (matches!(
+                            kind,
+                            KIND_FIELD
+                                | KIND_GETTER
+                                | KIND_PROPERTY
+                                | KIND_STATIC_FIELD
+                                | KIND_STATIC_PROPERTY
+                        ) && source.only_reads(occurrence.range)));
                 let test = self.files[file.index()].test || occurrence.test;
                 self.references.push(Reference {
                     file,
@@ -466,6 +509,8 @@ impl<'a> Builder<'a> {
             crate_deps: Vec::new(),
             layers: Vec::new(),
             serde_types: Default::default(),
+            value_types: self.value_types,
+            abstract_types: self.abstract_types,
             traits: Default::default(),
             trait_impls: Default::default(),
             // Read from the package's git, which the index knows nothing of.

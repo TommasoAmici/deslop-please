@@ -57,7 +57,10 @@ type a free function's first parameter is written as, which `scip-swift` spells 
 `App.admit(App.Queue)` and `App.transform(_: inout App.State)` both name `Queue` and `State`. `field-leak` follows
 a stored or computed property through its getter and setter; `shallow-module` counts methods and free functions but not synthesized accessors; `tangle` finds
 types that know each other in a circle; and `wide-directory` and `long-file` use every source SwiftPM lists, including
-files with no symbol occurrences. Symbols whose only identity is a raw compiler USR and that have no resolved display
+files with no symbol occurrences. A `let` field is a copy wherever it is used, even when the code calls a method on
+what it holds; a getter value compared with `!=` is read. `shared-mutable-bag` reads a class's fields only: a struct
+or enum is copied at every assignment, so a write through one value is not seen by another, and a protocol member has
+no storage. Symbols whose only identity is a raw compiler USR and that have no resolved display
 name are left out,
 because the model cannot safely say which type or member they belong to. A symbol also needs a definition range that
 spells its name in the source. Compiler-generated members such as Observation backing fields are left out; synthesized

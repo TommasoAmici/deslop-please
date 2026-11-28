@@ -109,6 +109,13 @@ fn shared_mutable_bag(
     outside: &HashMap<ItemId, Vec<&Use>>,
     scope: Option<NodeId>,
 ) -> Option<Diagnostic> {
+    // The rule is about one value many modules write through. A value type is
+    // copied at every assignment, so a write through one value is not seen by
+    // another; a protocol member has no storage at all.
+    let type_item = graph.things[thing.index()].item;
+    if model.value_types.contains(&type_item) || model.abstract_types.contains(&type_item) {
+        return None;
+    }
     let tree = &model.tree;
     let home = graph.things[thing.index()].home;
     let mut mutating_modules: BTreeMap<NodeId, BTreeSet<Location>> = BTreeMap::new();
